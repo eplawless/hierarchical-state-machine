@@ -25,9 +25,8 @@ function StateMachineFactory(props) {
 }
 
 StateMachineFactory.prototype = {
-    create: function(extra, parent) {
+    create: function(extra) {
         var result = new StateMachine(this.props, extra);
-        result.parent = parent;
         return result;
     }
 };
@@ -65,36 +64,64 @@ StateMachine.prototype = {
             this.exit();
         }
         this.entered = true;
-        var beforeEnter = tryToGet(this, 'extra', 'beforeEnter');
-        var onEnter = tryToGet(this, 'props', 'onEnter');
-        var afterEnter = tryToGet(this, 'extra', 'afterEnter');
+        this._invokeEnterHandlers(tryToGet(this, 'props'), tryToGet(this, 'extra'));
+        this.transition(this.props.startState);
+    },
+
+    _invokeEnterHandlers: function(props, extra) {
+        var beforeEnter = tryToGet(extra, 'beforeEnter');
+        var onEnter = tryToGet(props, 'onEnter');
+        var afterEnter = tryToGet(extra, 'afterEnter');
         tryToCall(beforeEnter, this, this);
         tryToCall(onEnter, this, this);
         tryToCall(afterEnter, this, this);
-        this.transition(this.props.startState);
+    },
+
+    _enterNestedState: function(stateName, stateProps, stateExtra) {
+        var nestedStateMachineFactory = this._nestedStateMachineFactories[stateName];
+        if (nestedStateMachineFactory) {
+            var nestedStateMachine = nestedStateMachineFactory.create(stateExtra);
+            this._nestedStateMachines[stateName] = nestedStateMachine;
+            nestedStateMachine.enter();
+        } else {
+            this._invokeEnterHandlers(stateProps, stateExtra);
+        }
     },
 
     exit: function() {
         if (!this.entered) {
             return;
         }
-        var currentStateName = this.currentStateName;
-        if (currentStateName) {
-            var beforeExitCurrentState = tryToGet(this, 'extra', currentStateName, 'beforeExit');
-            var onExitCurrentState = tryToGet(this, 'props', 'states', currentStateName, 'onExit');
-            var afterExitCurrentState = tryToGet(this, 'extra', currentStateName, 'afterExit');
-            tryToCall(beforeExitCurrentState, this, this);
-            tryToCall(onExitCurrentState, this, this);
-            tryToCall(afterExitCurrentState, this, this);
-            this.currentStateName = null;
-        }
-        var beforeExit = tryToGet(this, 'extra', 'beforeExit');
-        var onExit = tryToGet(this, 'props', 'onExit');
-        var afterExit = tryToGet(this, 'extra', 'afterExit');
+        this._exitNestedState(
+            this.currentStateName,
+            tryToGet(this, 'props', 'states', this.currentStateName),
+            tryToGet(this, 'extra', 'states', this.currentStateName)
+        );
+        this._invokeExitHandlers(
+            tryToGet(this, 'props'),
+            tryToGet(this, 'extra')
+        );
+        this.entered = false;
+    },
+
+    _invokeExitHandlers: function(props, extra) {
+        var beforeExit = tryToGet(extra, 'beforeExit');
+        var onExit = tryToGet(props, 'onExit');
+        var afterExit = tryToGet(extra, 'afterExit');
         tryToCall(beforeExit, this, this);
         tryToCall(onExit, this, this);
         tryToCall(afterExit, this, this);
-        this.entered = false;
+    },
+
+    _exitNestedState: function(stateName, stateProps, stateExtra) {
+        var nestedStateMachine = this._nestedStateMachines[stateName];
+        if (nestedStateMachine) {
+            nestedStateMachine.exit();
+            delete this._nestedStateMachines[stateName];
+        } else {
+            this._invokeExitHandlers(stateProps, stateExtra);
+        }
+        this.currentStateName = null;
     },
 
     transition: function(stateName) {
@@ -138,79 +165,83 @@ StateMachine.prototype = {
                 continue;
             }
 
-            var beforeExit = tryToGet(extra, lastStateName, 'beforeExit');
-            var onExit = tryToGet(lastState, 'onExit');
-            var afterExit = tryToGet(extra, lastStateName, 'afterExit');
+            this._exitNestedState(
+                lastStateName,
+                lastState,
+                tryToGet(extra, 'states', lastStateName)
+            );
 
-            var beforeTransition = tryToGet(extra, lastStateName, 'beforeTransitionTo', nextStateName);
+            var beforeTransition = tryToGet(extra, 'states', lastStateName, 'beforeTransitionTo', nextStateName);
             var onTransition = tryToGet(lastState, 'onTransitionTo', nextStateName);
-            var afterTransition = tryToGet(extra, lastStateName, 'afterTransitionTo', nextStateName);
-
-            var beforeEnter = tryToGet(extra, nextStateName, 'beforeEnter');
-            var onEnter = tryToGet(nextState, 'onEnter');
-            var afterEnter = tryToGet(extra, nextStateName, 'afterEnter');
-
-            var lastStateNestedStateMachine = this._nestedStateMachines[lastStateName];
-            if (lastStateNestedStateMachine) {
-                lastStateNestedStateMachine.exit();
-                delete this._nestedStateMachines[lastStateName];
-            } else {
-                tryToCall(beforeExit, this, this);
-                tryToCall(onExit, this, this);
-                tryToCall(afterExit, this, this);
-            }
-
+            var afterTransition = tryToGet(extra, 'states', lastStateName, 'afterTransitionTo', nextStateName);
             tryToCall(beforeTransition, this, this);
             tryToCall(onTransition, this, this);
             tryToCall(afterTransition, this, this);
 
             this.currentStateName = nextStateName;
 
-            var nextNestedStateMachineFactory = this._nestedStateMachineFactories[nextStateName];
-            if (nextNestedStateMachineFactory) {
-                var nextNestedStateMachineExtra = tryToGet(extra, nextStateName, 'states');
-                var nextNestedStateMachine = nextNestedStateMachineFactory.create(nextNestedStateMachineExtra);
-                this._nestedStateMachines[nextStateName] = nextNestedStateMachine;
-                nextNestedStateMachine.enter();
-            } else {
-                tryToCall(beforeEnter, this, this);
-                tryToCall(onEnter, this, this);
-                tryToCall(afterEnter, this, this);
-            }
+            this._enterNestedState(
+                nextStateName,
+                nextState,
+                tryToGet(extra, 'states', nextStateName)
+            );
         }
         this._isTransitioning = false;
     }
 };
 
-var PlayerFactory = new StateMachineFactory({
+var playerFactory = new StateMachineFactory({
     startState: 'stopped',
     onEnter: function() { console.log('starting up player') },
     onExit: function() { console.log('shutting down player') },
     states: {
         stopped: {
             startState: 'idle',
-            onEnter: function() { console.log('entering stopped state') },
-            onExit: function() { console.log('leaving stopped state') },
+            onEnter: function() { console.log(' entering stopped state') },
+            onExit: function() { console.log(' leaving stopped state') },
             states: {
                 idle: {
-                    onEnter: function() { console.log('entering stopped.idle state') },
-                    onExit: function() { console.log('leaving stopped.idle state') }
+                    onEnter: function() {
+                        console.log('  entering stopped.idle state')
+                        this.transition('error');
+                    },
+                    onExit: function() { console.log('  leaving stopped.idle state') },
+                    onTransitionTo: {
+                        error: function() { console.log('  moving from idle to error state!') }
+                    }
+                },
+                error: {
+                    onEnter: function() { console.log('  entering stopped.error state') },
+                    onExit: function() { console.log('  exiting stopped.error state') }
                 }
             }
         },
         playing: {
-            onEnter: function() { console.log('entering playing state') },
-            onExit: function() { console.log('leaving playing state') }
+            onEnter: function() { console.log(' entering playing state') },
+            onExit: function() { console.log(' leaving playing state') }
         }
     }
 });
 
-var player = PlayerFactory.create({
+var player = playerFactory.create({
     beforeEnter: function() { console.log('about to start up player') },
-    afterExit: function() { console.log('player was just shut down') }
+    afterExit: function() { console.log('player was just shut down') },
+    states: {
+        stopped: {
+            beforeEnter: function() { console.log(' before entering stopped state') },
+            afterEnter: function() { console.log(' after entering stopped state') },
+            states: {
+                idle: {
+                    beforeExit: function() { console.log('  before exiting idle state') },
+                    afterTransitionTo: {
+                        error: function() { console.log('  after transition bit to idle') }
+                    }
+                }
+            }
+        }
+    }
 });
 
-player.transition('playing')
-player.exit();
-player.exit();
-player.enter();
+player.enter()
+player.exit()
+
