@@ -1,17 +1,63 @@
-function tryToGet() {
-    var obj = arguments[0];
-    for (var idx = 1; idx < arguments.length; ++idx) {
-        obj = obj ? obj[arguments[idx]] : undefined;
-    }
-    return obj;
+var Rx = require('rx');
+var tryToGet = require('./tryToGet');
+var tryToCall = require('./tryToCall');
+
+function State(props, behavior, parent) {
+    this._props = props || {};
+    this._entered = false;
+    this._behavior = behavior;
+    this.parent = parent;
 }
 
-function tryToCall(method, scope) {
-    if (typeof method === 'function') {
-        var args = Array.prototype.slice.call(arguments, 2);
-        method.apply(scope, args);
+State.prototype = {
+    get enters() {
+        if (!this._enters) { this._enters = new Rx.Subject; }
+        return this._enters;
+    },
+    get exits() {
+        if (!this._exits) { this._exits = new Rx.Subject; }
+        return this._exits;
+    },
+    update: function(behavior) {
+        this._behavior = behavior;
+    },
+    enter: function() {
+        if (!this.canBeEntered())
+            return false;
+        this.entered = true;
+        this._enters && this._enters.onNext();
+        tryToCall(tryToGet(this, '_behavior', 'beforeEnter'), this, this, this.parent);
+        tryToCall(tryToGet(this, '_props', 'onEnter'), this, this, this.parent);
+        tryToCall(tryToGet(this, '_behavior', 'afterEnter'), this, this, this.parent);
+        return true;
+    },
+    exit: function() {
+        if (!this.canBeExited())
+            return false;
+        tryToCall(tryToGet(this, '_behavior', 'beforeExit'), this, this, this.parent);
+        tryToCall(tryToGet(this, '_props', 'onExit'), this, this, this.parent);
+        tryToCall(tryToGet(this, '_behavior', 'afterExit'), this, this, this.parent);
+        this._exits && this._exits.onNext();
+        this.entered = false;
+        return true;
+    },
+    canBeEntered: function() {
+        if (this.entered)
+            return false;
+        var canEnter = tryToGet(this, '_props', 'canEnter');
+        if (canEnter && !tryToCall(canEnter, this, this))
+            return false;
+        return true;
+    },
+    canBeExited: function() {
+        if (!this.entered)
+            return false;
+        var canExit = tryToGet(this, '_props', 'canExit');
+        if (canExit && !tryToCall(canExit, this, this))
+            return false;
+        return true;
     }
-}
+};
 
 function StateMachineFactory(props) {
     this._props = props || {};
@@ -32,11 +78,9 @@ StateMachineFactory.prototype = {
 };
 
 function StateMachine(props, extra, parent) {
-
     this.exit = this.exit.bind(this);
     this.enter = this.enter.bind(this);
     this.transition = this.transition.bind(this);
-
     this._props = props || {};
     this.parent = parent;
     ('allowSelfTransitions' in this._props) || (this._props.allowSelfTransitions = false);
@@ -46,12 +90,21 @@ function StateMachine(props, extra, parent) {
     this._entered = false;
     this.currentStateName = null;
     this._nestedStateMachineFactories = this._createNestedStateMachineFactories(this._props.states);
-    this._nestedStateMachines = {};
+    this._nestedStates = {};
     this._isTransitioning = false;
     this._queuedEnters = [];
 }
 
 StateMachine.prototype = {
+
+    get enters() {
+        if (!this._enters) { this._enters = new Rx.Subject; }
+        return this._enters;
+    },
+    get exits() {
+        if (!this._exits) { this._exits = new Rx.Subject; }
+        return this._exits;
+    },
 
     _createNestedStateMachineFactories: function(states) {
         var result = {};
@@ -70,61 +123,44 @@ StateMachine.prototype = {
             this.exit();
         }
         this._entered = true;
-        this._invokeEnterHandlers(tryToGet(this, '_props'), tryToGet(this, '_extra'));
+        this._enters && this._enters.onNext();
+        tryToCall(tryToGet(this, '_extra', 'beforeEnter'), this, this, this.parent);
+        tryToCall(tryToGet(this, '_props', 'onEnter'), this, this, this.parent);
         this.transition(this._props.startState);
-    },
-
-    _invokeEnterHandlers: function(props, extra) {
-        var beforeEnter = tryToGet(extra, 'beforeEnter');
-        var onEnter = tryToGet(props, 'onEnter');
-        var afterEnter = tryToGet(extra, 'afterEnter');
-        tryToCall(beforeEnter, this, this);
-        tryToCall(onEnter, this, this);
-        tryToCall(afterEnter, this, this);
+        tryToCall(tryToGet(this, '_extra', 'afterEnter'), this, this, this.parent);
     },
 
     _enterNestedState: function(stateName, stateProps, stateExtra) {
+        this.currentStateName = stateName;
         var nestedStateMachineFactory = this._nestedStateMachineFactories[stateName];
-        if (nestedStateMachineFactory) {
-            var nestedStateMachine = nestedStateMachineFactory.create(stateExtra, this);
-            this._nestedStateMachines[stateName] = nestedStateMachine;
-            nestedStateMachine.enter();
-        } else {
-            this._invokeEnterHandlers(stateProps, stateExtra);
-        }
+        var nestedState = nestedStateMachineFactory
+            ? nestedStateMachineFactory.create(stateExtra, this)
+            : new State(stateProps, stateExtra, this);
+        this._nestedStates[stateName] = nestedState;
+        nestedState.enter();
     },
 
     exit: function() {
         if (!this._entered) {
             return;
         }
-        tryToCall(tryToGet(this, '_extra', 'beforeExit'), this, this);
+        tryToCall(tryToGet(this, '_extra', 'beforeExit'), this, this, this.parent);
         this._exitNestedState(
             this.currentStateName,
             tryToGet(this, '_props', 'states', this.currentStateName),
             tryToGet(this, '_extra', 'states', this.currentStateName)
         );
-        tryToCall(tryToGet(this, '_props', 'onExit'), this, this);
-        tryToCall(tryToGet(this, '_extra', 'afterExit'), this, this);
+        tryToCall(tryToGet(this, '_props', 'onExit'), this, this, this.parent);
+        tryToCall(tryToGet(this, '_extra', 'afterExit'), this, this, this.parent);
         this._entered = false;
-    },
-
-    _invokeExitHandlers: function(props, extra) {
-        var beforeExit = tryToGet(extra, 'beforeExit');
-        var onExit = tryToGet(props, 'onExit');
-        var afterExit = tryToGet(extra, 'afterExit');
-        tryToCall(beforeExit, this, this);
-        tryToCall(onExit, this, this);
-        tryToCall(afterExit, this, this);
+        this._exits && this._exits.onNext();
     },
 
     _exitNestedState: function(stateName, stateProps, stateExtra) {
-        var nestedStateMachine = this._nestedStateMachines[stateName];
-        if (nestedStateMachine) {
-            nestedStateMachine.exit();
-            delete this._nestedStateMachines[stateName];
-        } else {
-            this._invokeExitHandlers(stateProps, stateExtra);
+        var nestedState = this._nestedStates[stateName];
+        if (nestedState) {
+            nestedState.exit();
+            delete this._nestedStates[stateName];
         }
         this.currentStateName = null;
     },
@@ -170,20 +206,19 @@ StateMachine.prototype = {
                 continue;
             }
 
+            var beforeTransition = tryToGet(extra, 'states', lastStateName, 'beforeTransitionTo', nextStateName)
+            var onTransition = tryToGet(lastState, 'onTransitionTo', nextStateName)
+            var beforeEntering = tryToGet(extra, 'states', lastStateName, 'beforeEnteringInto', nextStateName)
+
             this._exitNestedState(
                 lastStateName,
                 lastState,
                 tryToGet(extra, 'states', lastStateName)
             );
 
-            var beforeTransition = tryToGet(extra, 'states', lastStateName, 'beforeTransitionTo', nextStateName);
-            var onTransition = tryToGet(lastState, 'onTransitionTo', nextStateName);
-            var beforeEntering = tryToGet(extra, 'states', lastStateName, 'beforeEnteringInto', nextStateName);
             tryToCall(beforeTransition, this, this);
             tryToCall(onTransition, this, this);
             tryToCall(beforeEntering, this, this);
-
-            this.currentStateName = nextStateName;
 
             this._enterNestedState(
                 nextStateName,

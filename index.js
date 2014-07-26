@@ -68,35 +68,31 @@ function getFsmFactory(switchovers, faultTriggers, diagnostics, operatorInServic
         startState: 'inService',
         states: {
             inService: {
-                onEnter: function() {
-                    var parent = this.parent;
-                    var disableService = parent.transition.bind(parent, 'outOfService');
-                    this.faultTriggersSubscription = faultTriggers.subscribe(disableService);
-                },
-                onExit: function() {
-                    this.faultTriggersSubscription.dispose();
-                    delete this.faultTriggersSubscription;
+                onEnter: function(inServiceState, topLevelState) {
+                    faultTriggers
+                        .takeUntil(inServiceState.exits)
+                        .subscribe(function() {
+                            topLevelState.transition('outOfService')
+                        });
                 },
                 startState: 'standby',
                 states: {
                     standby: {
-                        onEnter: function() {
-                            var activate = this.transition.bind(this, 'active');
-                            this.switchoversSubscription = switchovers.subscribe(activate);
+                        onEnter: function(standbyState, inServiceState) {
+                            switchovers
+                                .takeUntil(standbyState.exits)
+                                .subscribe(function() {
+                                    inServiceState.transition('active')
+                                });
                         },
-                        onExit: function() {
-                            this.switchoversSubscription.dispose();
-                            delete this.switchoversSubscription;
-                        }
                     },
                     active: {
-                        onEnter: function() {
-                            var deactivate = this.transition.bind(this, 'standby');
-                            this.switchoversSubscription = switchovers.subscribe(deactivate);
-                        },
-                        onExit: function() {
-                            this.switchoversSubscription.dispose();
-                            delete this.switchoversSubscription;
+                        onEnter: function(activeState, inServiceState) {
+                            switchovers
+                                .takeUntil(activeState.exits)
+                                .subscribe(function() {
+                                    inServiceState.transition('standby')
+                                });
                         }
                     }
                 }
@@ -105,35 +101,25 @@ function getFsmFactory(switchovers, faultTriggers, diagnostics, operatorInServic
                 startState: 'suspect',
                 states: {
                     suspect: {
-                        onEnter: function() {
-                            var self = this;
-                            var parent = this.parent;
-                            console.log('running diagnostics...')
-                            this.diagnosticsSubscription =
-                                diagnostics
-                                    .doAction(function(everythingIsFine) {
-                                        everythingIsFine
-                                            ? parent.transition('inService')
-                                            : self.transition('failed');
-                                    })
-                                    .subscribe(NOOP);
+                        onEnter: function(suspectState, outOfServiceState) {
+                            var topLevelState = outOfServiceState.parent;
+                            diagnostics
+                                .takeUntil(suspectState.exits)
+                                .subscribe(function(everythingIsFine) {
+                                    everythingIsFine
+                                        ? topLevelState.transition('inService')
+                                        : outOfServiceState.transition('failed');
+                                });
                         },
-                        onExit: function() {
-                            this.diagnosticsSubscription.dispose();
-                            delete this.diagnosticsSubscription;
-                        }
                     },
                     failed: {
-                        onEnter: function() {
-                            var checkDiagnosticsAgain = this.transition.bind(this, 'suspect');
-                            this.operatorInServiceSubscription =
-                                operatorInService
-                                    .where(function(isTrue) { return isTrue; })
-                                    .subscribe(checkDiagnosticsAgain)
-                        },
-                        onExit: function() {
-                            this.operatorInServiceSubscription.dispose();
-                            delete this.operatorInServiceSubscription;
+                        onEnter: function(failedState, outOfServiceState) {
+                            operatorInService
+                                .takeUntil(failedState.exits)
+                                .where(function(isTrue) { return isTrue; })
+                                .subscribe(function() {
+                                    outOfServiceState.transition('suspect')
+                                })
                         }
                     }
                 }
@@ -156,16 +142,21 @@ var fsm = fsmFactory.create({
             beforeEnter: function() { console.log('entered in service') },
             afterExit: function() { console.log('exited in service') },
             states: {
-                active: { beforeEnter: function() { console.log('switched to active') } },
-                standby: { beforeEnter: function() { console.log('switched to standby') } }
+                active: { beforeEnter: function() { console.log(' switched to active') } },
+                standby: { beforeEnter: function() { console.log(' switched to standby') } }
             }
         },
         outOfService: {
             beforeEnter: function() { console.log('entered out of service') },
             afterExit: function() { console.log('exited out of service') },
             states: {
-                suspect: { beforeEnter: function() { console.log('entered suspect') } },
-                failed: { beforeEnter: function() { console.log('entered failed') } }
+                suspect: {
+                    beforeEnter: function() {
+                        console.log(' entered suspect');
+                        console.log(' running diagnostics...');
+                    }
+                },
+                failed: { beforeEnter: function() { console.log(' entered failed') } }
             }
         }
     }
@@ -178,3 +169,4 @@ switchovers.onNext();
 faultTriggers.onNext();
 operatorInService.onNext(true);
 diagnostics.onNext(true);
+
