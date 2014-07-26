@@ -2,37 +2,33 @@ var Rx = require('rx');
 var StateMachineFactory = require('./StateMachineFactory');
 var NOOP = function() {};
 
-/*
-
 var animatedStateMachineFactory = new StateMachineFactory({
     startState: 'start',
     requireExplicitTransitions: true,
     states: {
         start: {
             allowTransitionsTo: { animating: true },
-            onEnter: function() {
-                this.value = 0;
-                this.interval = 1;
-                this.timeout = 100;
+            onEnter: function(startState, topLevelState) {
+                topLevelState.value = 0;
+                topLevelState.interval = 1;
+                topLevelState.timeout = 100;
             }
         },
         animating: {
             allowTransitionsTo: { end: true },
-            onEnter: function() {
-                var interval = Rx.Observable.interval(this.interval);
-                var timer = Rx.Observable.timer(this.timeout);
-                var transitionToEnd = this.transition.bind(this, 'end');
-                this.animationDisposable =
-                    interval.takeUntil(timer)
-                        .doAction(function() { ++this.value; }.bind(this))
-                        .subscribe(NOOP, NOOP, transitionToEnd);
+            onEnter: function(animatingState, topLevelState) {
+                var interval = Rx.Observable.interval(topLevelState.interval);
+                var timer = Rx.Observable.timer(topLevelState.timeout);
+                var transitionToEnd = topLevelState.transition.bind(topLevelState, 'end');
+                interval
+                    .takeUntil(timer)
+                    .takeUntil(animatingState.exits)
+                    .doAction(function() { ++topLevelState.value; })
+                    .subscribe(NOOP, NOOP, transitionToEnd);
             },
-            onExit: function() {
-                this.animationDisposable.dispose();
-                delete this.animationDisposable;
-            }
         },
-        end: {}
+        end: {
+        }
     }
 });
 
@@ -40,12 +36,14 @@ var animatedStateMachine = animatedStateMachineFactory.create({
     beforeExit: function() { console.log('animation stopped') },
     states: {
         start: {
-            afterEnter: function() {
-                this.value = 30;
-                this.timeout = 700;
+            afterEnter: function(startState, topLevelState) {
+                topLevelState.value = 30;
+                topLevelState.timeout = 700;
             },
             beforeTransitionTo: {
-                animating: function() { console.log('about to start animating with value', this.value) }
+                animating: function(topLevelState) {
+                    console.log('about to start animating with value', this.value)
+                }
             }
         },
         animating: {
@@ -54,15 +52,15 @@ var animatedStateMachine = animatedStateMachineFactory.create({
     }
 });
 
+animatedStateMachine.enter();
 animatedStateMachine.transition('animating');
 setTimeout(function() {
     animatedStateMachine.exit();
 }, 340)
 
-*/
-
 // http://www.eventhelix.com/realtimemantra/images/Hierarchical_state_transition_diagram.gif
 
+/*
 function getFsmFactory(switchovers, faultTriggers, diagnostics, operatorInService) {
     return new StateMachineFactory({
         startState: 'inService',
@@ -169,4 +167,5 @@ switchovers.onNext();
 faultTriggers.onNext();
 operatorInService.onNext(true);
 diagnostics.onNext(true);
+*/
 

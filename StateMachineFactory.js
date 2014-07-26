@@ -71,13 +71,13 @@ function StateMachineFactory(props) {
 }
 
 StateMachineFactory.prototype = {
-    create: function(extra, parent) {
-        var result = new StateMachine(this._props, extra, parent);
+    create: function(behavior, parent) {
+        var result = new StateMachine(this._props, behavior, parent);
         return result;
     }
 };
 
-function StateMachine(props, extra, parent) {
+function StateMachine(props, behavior, parent) {
     this.exit = this.exit.bind(this);
     this.enter = this.enter.bind(this);
     this.transition = this.transition.bind(this);
@@ -86,7 +86,7 @@ function StateMachine(props, extra, parent) {
     ('allowSelfTransitions' in this._props) || (this._props.allowSelfTransitions = false);
     ('requireExplicitTransitions' in this._props) || (this._props.requireExplicitTransitions = false);
     ('states' in this._props) || (this._props.states = {});
-    this._extra = extra || {};
+    this._behavior = behavior || {};
     this._entered = false;
     this.currentStateName = null;
     this._nestedStateMachineFactories = this._createNestedStateMachineFactories(this._props.states);
@@ -122,20 +122,20 @@ StateMachine.prototype = {
         if (this.currentStateName) {
             this.exit();
         }
-        this._entered = true;
+        this._entered = true; // we set this flag here so we can transition more on the way in
         this._enters && this._enters.onNext();
-        tryToCall(tryToGet(this, '_extra', 'beforeEnter'), this, this, this.parent);
+        tryToCall(tryToGet(this, '_behavior', 'beforeEnter'), this, this, this.parent);
         tryToCall(tryToGet(this, '_props', 'onEnter'), this, this, this.parent);
         this.transition(this._props.startState);
-        tryToCall(tryToGet(this, '_extra', 'afterEnter'), this, this, this.parent);
+        tryToCall(tryToGet(this, '_behavior', 'afterEnter'), this, this, this.parent);
     },
 
-    _enterNestedState: function(stateName, stateProps, stateExtra) {
+    _enterNestedState: function(stateName, stateProps, stateBehavior) {
         this.currentStateName = stateName;
         var nestedStateMachineFactory = this._nestedStateMachineFactories[stateName];
         var nestedState = nestedStateMachineFactory
-            ? nestedStateMachineFactory.create(stateExtra, this)
-            : new State(stateProps, stateExtra, this);
+            ? nestedStateMachineFactory.create(stateBehavior, this)
+            : new State(stateProps, stateBehavior, this);
         this._nestedStates[stateName] = nestedState;
         nestedState.enter();
     },
@@ -144,19 +144,19 @@ StateMachine.prototype = {
         if (!this._entered) {
             return;
         }
-        tryToCall(tryToGet(this, '_extra', 'beforeExit'), this, this, this.parent);
+        this._entered = false; // we set this flag here so we can't transition on the way out
+        tryToCall(tryToGet(this, '_behavior', 'beforeExit'), this, this, this.parent);
         this._exitNestedState(
             this.currentStateName,
             tryToGet(this, '_props', 'states', this.currentStateName),
-            tryToGet(this, '_extra', 'states', this.currentStateName)
+            tryToGet(this, '_behavior', 'states', this.currentStateName)
         );
         tryToCall(tryToGet(this, '_props', 'onExit'), this, this, this.parent);
-        tryToCall(tryToGet(this, '_extra', 'afterExit'), this, this, this.parent);
-        this._entered = false;
+        tryToCall(tryToGet(this, '_behavior', 'afterExit'), this, this, this.parent);
         this._exits && this._exits.onNext();
     },
 
-    _exitNestedState: function(stateName, stateProps, stateExtra) {
+    _exitNestedState: function(stateName, stateProps, stateBehavior) {
         var nestedState = this._nestedStates[stateName];
         if (nestedState) {
             nestedState.exit();
@@ -165,18 +165,27 @@ StateMachine.prototype = {
         this.currentStateName = null;
     },
 
+    _runTransitionHandlers: function(lastStateName, nextStateName) {
+        var beforeTransition = tryToGet(this._behavior, 'states', lastStateName, 'beforeTransitionTo', nextStateName)
+        var onTransition = tryToGet(this._states, lastStateName, 'onTransitionTo', nextStateName)
+        var beforeEntering = tryToGet(this._behavior, 'states', lastStateName, 'beforeEnteringInto', nextStateName)
+        tryToCall(beforeTransition, this, this, this.parent);
+        tryToCall(onTransition, this, this, this.parent);
+        tryToCall(beforeEntering, this, this, this.parent);
+    },
+
     transition: function(stateName) {
+        if (!this._entered) {
+            return;
+        }
         var props = this._props;
-        var extra = this._extra;
+        var behavior = this._behavior;
         if (this._isTransitioning) {
             this._queuedEnters.push(stateName);
             return;
         }
 
         this._isTransitioning = true;
-        if (!this._entered) {
-            this.enter();
-        }
 
         this._queuedEnters.push(stateName);
         while (this._queuedEnters.length) {
@@ -206,24 +215,18 @@ StateMachine.prototype = {
                 continue;
             }
 
-            var beforeTransition = tryToGet(extra, 'states', lastStateName, 'beforeTransitionTo', nextStateName)
-            var onTransition = tryToGet(lastState, 'onTransitionTo', nextStateName)
-            var beforeEntering = tryToGet(extra, 'states', lastStateName, 'beforeEnteringInto', nextStateName)
-
             this._exitNestedState(
                 lastStateName,
                 lastState,
-                tryToGet(extra, 'states', lastStateName)
+                tryToGet(behavior, 'states', lastStateName)
             );
 
-            tryToCall(beforeTransition, this, this);
-            tryToCall(onTransition, this, this);
-            tryToCall(beforeEntering, this, this);
+            this._runTransitionHandlers(lastStateName, nextStateName);
 
             this._enterNestedState(
                 nextStateName,
                 nextState,
-                tryToGet(extra, 'states', nextStateName)
+                tryToGet(behavior, 'states', nextStateName)
             );
         }
         this._isTransitioning = false;
