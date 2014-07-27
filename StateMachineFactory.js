@@ -168,10 +168,47 @@ StateMachine.prototype = {
     _runTransitionHandlers: function(lastStateName, nextStateName) {
         var beforeTransition = tryToGet(this._behavior, 'states', lastStateName, 'beforeTransitionTo', nextStateName)
         var onTransition = tryToGet(this._states, lastStateName, 'onTransitionTo', nextStateName)
-        var beforeEntering = tryToGet(this._behavior, 'states', lastStateName, 'beforeEnteringInto', nextStateName)
-        tryToCall(beforeTransition, this, this, this.parent);
-        tryToCall(onTransition, this, this, this.parent);
-        tryToCall(beforeEntering, this, this, this.parent);
+        var afterTransition = tryToGet(this._behavior, 'states', lastStateName, 'afterTransitionTo', nextStateName)
+        tryToCall(beforeTransition, this, this, tryToGet(this, 'parent'));
+        tryToCall(onTransition, this, this, tryToGet(this, 'parent'));
+        tryToCall(afterTransition, this, this, tryToGet(this, 'parent'));
+    },
+
+    _isTransitionAllowed: function(lastStateName, nextStateName, lastState, nextState) {
+        if (!nextState) { return false; }
+        var isSelfTransition = lastStateName === nextStateName;
+        var allowSelfTransitions = !!this._props.allowSelfTransitions;
+        var requireExplicitTransitions = !!this._props.requireExplicitTransitions;
+
+        var allowTransitionsTo = tryToGet(this._props, 'states', lastStateName, 'allowTransitionsTo');
+        var allowTransitionsFromLastToNext = false;
+        if (Array.isArray(allowTransitionsTo)) {
+            allowTransitionsFromLastToNext = allowTransitionsTo.indexOf(nextStateName) > -1;
+        } else {
+            allowTransitionsFromLastToNext = !!tryToGet(allowTransitionsTo, nextStateName);
+        }
+
+        if (isSelfTransition && !allowSelfTransitions && !allowTransitionsFromLastToNext) {
+            return false;
+        }
+
+        if (requireExplicitTransitions && lastState && !allowTransitionsFromLastToNext) {
+            return false;
+        }
+
+        var canExit = tryToGet(lastState, 'canExit');
+        var canTransition = tryToGet(lastState, 'canTransitionTo', nextStateName);
+        var canEnter = tryToGet(nextState, 'canEnter');
+
+        var lastNestedState = this._nestedStates[lastStateName];
+        if (canExit && !canExit.call(lastNestedState, lastNestedState, tryToGet(lastNestedState, 'parent')) ||
+            canTransition && !canTransition.call(lastNestedState, lastNestedState, tryToGet(lastNestedState, 'parent')) ||
+            canEnter && !canEnter.call(lastNestedState, lastNestedState, tryToGet(lastNestedState, 'parent')))
+        {
+            return false;
+        }
+
+        return true;
     },
 
     transition: function(stateName) {
@@ -193,25 +230,7 @@ StateMachine.prototype = {
             var nextStateName = this._queuedEnters.shift();
             var lastState = props.states[lastStateName];
             var nextState = props.states[nextStateName];
-            if (!nextState) continue;
-
-            var isSelfTransitionAndIsNotAllowed = nextStateName === lastStateName &&
-                !props.allowSelfTransitions &&
-                !tryToGet(lastState, 'allowTransitionsTo', nextStateName);
-            if (isSelfTransitionAndIsNotAllowed) continue;
-
-            var isNotAllowed = props.requireExplicitTransitions && lastState &&
-                !tryToGet(lastState, 'allowTransitionsTo', nextStateName);
-            if (isNotAllowed) continue;
-
-            var canExit = tryToGet(lastState, 'canExit');
-            var canTransition = tryToGet(lastState, 'canTransitionTo', nextStateName);
-            var canEnter = tryToGet(nextState, 'canEnter');
-
-            if (canExit && !canExit.call(this, this)       ||
-                canTransition && !canTransition.call(this, this) ||
-                canEnter && !canEnter.call(this, this))
-            {
+            if (!this._isTransitionAllowed(lastStateName, nextStateName, lastState, nextState)) {
                 continue;
             }
 

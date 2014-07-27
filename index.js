@@ -7,7 +7,7 @@ var animatedStateMachineFactory = new StateMachineFactory({
     requireExplicitTransitions: true,
     states: {
         start: {
-            allowTransitionsTo: { animating: true },
+            allowTransitionsTo: ['animating'],
             onEnter: function(startState, topLevelState) {
                 topLevelState.value = 0;
                 topLevelState.interval = 1;
@@ -15,7 +15,7 @@ var animatedStateMachineFactory = new StateMachineFactory({
             }
         },
         animating: {
-            allowTransitionsTo: { end: true },
+            allowTransitionsTo: ['end'],
             onEnter: function(animatingState, topLevelState) {
                 var interval = Rx.Observable.interval(topLevelState.interval);
                 var timer = Rx.Observable.timer(topLevelState.timeout);
@@ -37,17 +37,20 @@ var animatedStateMachine = animatedStateMachineFactory.create({
     states: {
         start: {
             afterEnter: function(startState, topLevelState) {
+                console.log('entered')
                 topLevelState.value = 30;
                 topLevelState.timeout = 700;
             },
             beforeTransitionTo: {
                 animating: function(topLevelState) {
-                    console.log('about to start animating with value', this.value)
+                    console.log('about to start animating with value', topLevelState.value)
                 }
             }
         },
         animating: {
-            afterExit: function() { console.log('finished animating with value', this.value) }
+            afterExit: function(animatingState, topLevelState) {
+                console.log('finished animating with value', topLevelState.value)
+            }
         }
     }
 });
