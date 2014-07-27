@@ -236,6 +236,9 @@ var player = playerFactory.create({
 player.enter();
 */
 
+// Calculator example:
+// http://upload.wikimedia.org/wikipedia/en/a/a6/UML_state_machine_Fig2b.png
+
 function isOperator(key) {
     return /[+-/*]/.test(key);
 }
@@ -340,6 +343,4 @@ function clear() {
 }
 
 calculator.enter();
-input('3*5=+9');
-clear();
-input('2*2=');
+input('3*5=+9=7');

@@ -120,13 +120,22 @@ StateMachine.prototype = {
         tryToCall(tryToGet(this, '_behavior', 'afterEnter'), this, this, this.parent);
     },
 
-    _enterNestedState: function(stateName, stateProps, stateBehavior) {
-        this.currentStateName = stateName;
+    _getOrCreateNestedState: function(stateName, stateProps, stateBehavior) {
+        var nestedState = this._nestedStates[stateName];
+        if (nestedState) {
+            return nestedState;
+        }
         var nestedStateMachineFactory = this._nestedStateMachineFactories[stateName];
-        var nestedState = nestedStateMachineFactory
+        nestedState = nestedStateMachineFactory
             ? nestedStateMachineFactory.create(stateBehavior, this)
             : new State(stateProps, stateBehavior, this);
         this._nestedStates[stateName] = nestedState;
+        return nestedState;
+    },
+
+    _enterNestedState: function(stateName, stateProps, stateBehavior) {
+        this.currentStateName = stateName;
+        var nestedState = this._getOrCreateNestedState(stateName, stateProps, stateBehavior);
         nestedState.enter();
     },
 
@@ -153,15 +162,16 @@ StateMachine.prototype = {
             delete this._nestedStates[stateName];
         }
         this.currentStateName = null;
+        return nestedState;
     },
 
-    _runTransitionHandlers: function(lastStateName, nextStateName) {
+    _runTransitionHandlers: function(lastStateName, nextStateName, lastNestedState, nextNestedState) {
         var beforeTransition = tryToGet(this._behavior, 'states', lastStateName, 'beforeTransitionTo', nextStateName)
-        var onTransition = tryToGet(this._states, lastStateName, 'onTransitionTo', nextStateName)
+        var onTransition = tryToGet(this._props, 'states', lastStateName, 'onTransitionTo', nextStateName)
         var afterTransition = tryToGet(this._behavior, 'states', lastStateName, 'afterTransitionTo', nextStateName)
-        tryToCall(beforeTransition, this, this, tryToGet(this, 'parent'));
-        tryToCall(onTransition, this, this, tryToGet(this, 'parent'));
-        tryToCall(afterTransition, this, this, tryToGet(this, 'parent'));
+        tryToCall(beforeTransition, lastNestedState, lastNestedState, nextNestedState);
+        tryToCall(onTransition, lastNestedState, lastNestedState, nextNestedState);
+        tryToCall(afterTransition, lastNestedState, lastNestedState, nextNestedState);
     },
 
     _isTransitionAllowed: function(lastStateName, nextStateName, lastState, nextState) {
@@ -224,18 +234,21 @@ StateMachine.prototype = {
                 continue;
             }
 
-            this._exitNestedState(
+            var lastNestedState = this._exitNestedState(
                 lastStateName,
                 lastState,
                 tryToGet(behavior, 'states', lastStateName)
             );
 
-            this._runTransitionHandlers(lastStateName, nextStateName);
+            var nextStateBehavior = tryToGet(behavior, 'states', nextStateName);
+            var nextNestedState = this._getOrCreateNestedState(nextStateName, nextState, nextStateBehavior);
+
+            this._runTransitionHandlers(lastStateName, nextStateName, lastNestedState, nextNestedState);
 
             this._enterNestedState(
                 nextStateName,
                 nextState,
-                tryToGet(behavior, 'states', nextStateName)
+                nextStateBehavior
             );
         }
         this._isTransitioning = false;
