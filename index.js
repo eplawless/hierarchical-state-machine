@@ -258,8 +258,8 @@ var calculator = new StateMachine({
             startState: 'operand1',
             requireExplicitTransitions: true,
             onEnter: function(onState, calculatorState) {
-                onState.operand1digits = [];
-                onState.operand2digits = [];
+                onState.operand1Digits = [];
+                onState.operand2Digits = [];
                 onState.operator = null;
                 clearInput
                     .takeUntil(onState.exits)
@@ -276,7 +276,7 @@ var calculator = new StateMachine({
                             .takeUntil(operand1State.exits)
                             .subscribe(function(key) {
                                 if (isDigitOrDot(key)) {
-                                    onState.operand1digits.push(key);
+                                    onState.operand1Digits.push(key);
                                 } else if (isOperator(key)) {
                                     onState.operator = key;
                                     onState.transition('operand2')
@@ -291,7 +291,7 @@ var calculator = new StateMachine({
                             .takeUntil(operand2State.exits)
                             .subscribe(function(key) {
                                 if (isDigitOrDot(key)) {
-                                    onState.operand2digits.push(key);
+                                    onState.operand2Digits.push(key);
                                 } else if (key === '=') {
                                     onState.transition('result');
                                 }
@@ -301,8 +301,8 @@ var calculator = new StateMachine({
                 result: {
                     allowTransitionsTo: ['operand1','operand2'],
                     onEnter: function(resultState, onState) {
-                        var operand1 = parseFloat(onState.operand1digits.join(''));
-                        var operand2 = parseFloat(onState.operand2digits.join(''));
+                        var operand1 = parseFloat(onState.operand1Digits.join(''));
+                        var operand2 = parseFloat(onState.operand2Digits.join(''));
                         var result;
                         switch (onState.operator) {
                             case '+': result = operand1 + operand2; break;
@@ -316,12 +316,13 @@ var calculator = new StateMachine({
                             .takeUntil(resultState.exits)
                             .subscribe(function(key) {
                                 if (isDigitOrDot(key)) {
-                                    onState.operand1digits = [key];
-                                    onState.operand2digits = [];
+                                    onState.operand1Digits = [key];
+                                    onState.operand2Digits = [];
                                     onState.transition('operand1');
                                 } else if (isOperator(key)) {
-                                    onState.operand1digits = [result];
-                                    onState.operand2digits = [];
+                                    onState.operand1Digits = [result];
+                                    onState.operand2Digits = [];
+                                    onState.operator = key;
                                     onState.transition('operand2');
                                 }
                             });
@@ -343,4 +344,4 @@ function clear() {
 }
 
 calculator.enter();
-input('3*5=+9=7');
+input('7/2=*4=');
