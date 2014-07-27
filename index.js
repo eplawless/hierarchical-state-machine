@@ -1,4 +1,5 @@
 var Rx = require('rx');
+var StateMachine = require('./StateMachine');
 var StateMachineFactory = require('./StateMachineFactory');
 var NOOP = function() {};
 
@@ -27,8 +28,7 @@ var animatedStateMachineFactory = new StateMachineFactory({
                     .subscribe(NOOP, NOOP, transitionToEnd);
             },
         },
-        end: {
-        }
+        end: {}
     }
 });
 
