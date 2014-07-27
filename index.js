@@ -215,7 +215,7 @@ var player = playerFactory.create({
                 idle: {
                     beforeEnter: function() { console.log('entering stopped.idle state') },
                     beforeExit: function() { console.log('exiting stopped.idle state') },
-                    beforeEnteringInto: {
+                    beforeTransitionTo: {
                         error: function() { console.log('moving from stopped.idle to stopped.error') }
                     }
                 },
