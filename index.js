@@ -2,6 +2,7 @@ var Rx = require('rx');
 var StateMachine = require('./StateMachine');
 var StateMachineFactory = require('./StateMachineFactory');
 var NOOP = function() {};
+/*
 
 var animatedStateMachineFactory = new StateMachineFactory({
     startState: 'start',
@@ -60,6 +61,7 @@ animatedStateMachine.transition('animating');
 setTimeout(function() {
     animatedStateMachine.exit();
 }, 340)
+*/
 
 // http://www.eventhelix.com/realtimemantra/images/Hierarchical_state_transition_diagram.gif
 
@@ -172,3 +174,57 @@ operatorInService.onNext(true);
 diagnostics.onNext(true);
 */
 
+var playerFactory = new StateMachineFactory({
+    startState: 'stopped',
+    onEnter: function() { console.log('starting up player') },
+    onExit: function() { console.log('shutting down player') },
+    states: {
+        stopped: {
+            startState: 'idle',
+            onEnter: function() { console.log(' entering stopped state') },
+            onExit: function() { console.log(' leaving stopped state') },
+            states: {
+                idle: {
+                    onEnter: function(idleState, stoppedState) {
+                        console.log('  entering stopped.idle state')
+                        stoppedState.transition('error');
+                    },
+                    onExit: function() { console.log('  leaving stopped.idle state') },
+                    onTransitionTo: {
+                        error: function() { console.log('  moving from idle to error state!') }
+                    }
+                },
+                error: {
+                    onEnter: function() { console.log('  entering stopped.error state') },
+                    onExit: function() { console.log('  exiting stopped.error state') }
+                }
+            }
+        },
+        playing: {
+            onEnter: function() { console.log(' entering playing state') },
+            onExit: function() { console.log(' leaving playing state') }
+        }
+    }
+});
+
+var player = playerFactory.create({
+    beforeEnter: function() { console.log('about to start up player') },
+    afterExit: function() { console.log('player was just shut down') },
+    states: {
+        stopped: {
+            beforeEnter: function() { console.log(' before entering stopped state') },
+            afterEnter: function() { console.log(' after entering stopped state') },
+            states: {
+                idle: {
+                    beforeExit: function() { console.log('  before exiting idle state') },
+                    beforeEnteringInto: {
+                        error: function() { console.log('  after transition bit to idle') }
+                    }
+                }
+            }
+        }
+    }
+});
+
+player.enter();
+player.exit();

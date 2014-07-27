@@ -97,6 +97,7 @@ StateMachine.prototype = {
 
     _createNestedStateMachineFactories: function(states) {
         var result = {};
+        var StateMachineFactory = require('./StateMachineFactory')
         for (var stateName in states) {
             var state = states[stateName];
             var subStates = tryToGet(state, 'states');
