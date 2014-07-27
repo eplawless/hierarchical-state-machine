@@ -174,6 +174,7 @@ operatorInService.onNext(true);
 diagnostics.onNext(true);
 */
 
+/*
 var playerFactory = new StateMachineFactory({
     startState: 'stopped',
     states: {
@@ -233,3 +234,112 @@ var player = playerFactory.create({
 });
 
 player.enter();
+*/
+
+function isOperator(key) {
+    return /[+-/*]/.test(key);
+}
+
+function isDigitOrDot(key) {
+    return /[0-9.]/.test(key);
+}
+
+var keyInput = new Rx.Subject;
+var clearInput = new Rx.Subject;
+
+var calculator = new StateMachine({
+    startState: 'on',
+    allowSelfTransitions: true,
+    states: {
+        on: {
+            startState: 'operand1',
+            requireExplicitTransitions: true,
+            onEnter: function(onState, calculatorState) {
+                onState.operand1digits = [];
+                onState.operand2digits = [];
+                onState.operator = null;
+                clearInput
+                    .takeUntil(onState.exits)
+                    .subscribe(function() {
+                        calculatorState.transition('on');
+                    })
+            },
+            states: {
+                operand1: {
+                    allowTransitionsTo: ['operand2'],
+                    onEnter: function(operand1State, onState) {
+                        onState.operator = null;
+                        keyInput
+                            .takeUntil(operand1State.exits)
+                            .subscribe(function(key) {
+                                if (isDigitOrDot(key)) {
+                                    onState.operand1digits.push(key);
+                                } else if (isOperator(key)) {
+                                    onState.operator = key;
+                                    onState.transition('operand2')
+                                }
+                            });
+                    }
+                },
+                operand2: {
+                    allowTransitionsTo: ['result'],
+                    onEnter: function(operand2State, onState) {
+                        keyInput
+                            .takeUntil(operand2State.exits)
+                            .subscribe(function(key) {
+                                if (isDigitOrDot(key)) {
+                                    onState.operand2digits.push(key);
+                                } else if (key === '=') {
+                                    onState.transition('result');
+                                }
+                            });
+                    }
+                },
+                result: {
+                    allowTransitionsTo: ['operand1','operand2'],
+                    onEnter: function(resultState, onState) {
+                        var operand1 = parseFloat(onState.operand1digits.join(''));
+                        var operand2 = parseFloat(onState.operand2digits.join(''));
+                        var result;
+                        switch (onState.operator) {
+                            case '+': result = operand1 + operand2; break;
+                            case '-': result = operand1 - operand2; break;
+                            case '/': result = operand1 / operand2; break;
+                            case '*': result = operand1 * operand2; break;
+                            default: result = 'error';
+                        }
+                        console.log(result);
+                        keyInput
+                            .takeUntil(resultState.exits)
+                            .subscribe(function(key) {
+                                if (isDigitOrDot(key)) {
+                                    onState.operand1digits = [key];
+                                    onState.operand2digits = [];
+                                    onState.transition('operand1');
+                                } else if (isOperator(key)) {
+                                    onState.operand1digits = [result];
+                                    onState.operand2digits = [];
+                                    onState.transition('operand2');
+                                }
+                            });
+                    }
+                }
+            }
+        }
+    }
+})
+
+function input(string) {
+    for (var idx in string) {
+        keyInput.onNext(string[idx]);
+    }
+}
+
+function clear() {
+    clearInput.onNext();
+}
+
+calculator.enter();
+input('3*5=+9');
+clear();
+input('2*2=');
