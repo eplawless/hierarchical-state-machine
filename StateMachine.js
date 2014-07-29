@@ -65,10 +65,25 @@ State.prototype = {
             return false;
         return true;
     },
-    getChannel: function(name) {
+
+    getParentChannel: function(name) {
         var parent = this.parent;
         return tryToCall(tryToGet(parent, 'getChannel'), parent, name);
-    }
+    },
+
+    getReadOnlyParentChannel: function(name) {
+        var channel = this.getParentChannel(name);
+        return channel ? channel.takeUntil(this.exits) : channel;
+    },
+
+    getChannel: function(name) {
+        return this.getParentChannel(name);
+    },
+
+    getReadOnlyChannel: function(name) {
+        var channel = this.getChannel(name);
+        return channel ? channel.takeUntil(this.exits) : channel;
+    },
 };
 
 function StateMachine(props, behavior, parent) {
@@ -120,9 +135,23 @@ StateMachine.prototype = {
         return result;
     },
 
-    getChannel: function(name) {
+    getParentChannel: function(name) {
         var parent = this.parent;
-        return this._channels[name] || tryToCall(tryToGet(parent, 'getChannel'), parent, name);
+        return tryToCall(tryToGet(parent, 'getChannel'), parent, name);
+    },
+
+    getReadOnlyParentChannel: function(name) {
+        var channel = this.getParentChannel(name);
+        return channel ? channel.takeUntil(this.exits) : channel;
+    },
+
+    getChannel: function(name) {
+        return this._channels[name] || this.getParentChannel(name);
+    },
+
+    getReadOnlyChannel: function(name) {
+        var channel = this.getChannel(name);
+        return channel ? channel.takeUntil(this.exits) : channel;
     },
 
     _createNestedStateMachineFactories: function(states) {
