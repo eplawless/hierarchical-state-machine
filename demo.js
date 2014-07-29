@@ -62,6 +62,13 @@ var fsm = fsmFactory.create({
     }
 });
 
+console.log('The Incredible Machine!')
+console.log('Press "q" to exit the FSM')
+console.log('Press "e" to enter the FSM')
+console.log('Press "Ctrl-c" to exit the program')
+console.log('Press any other key to trigger a button press')
+console.log('')
+
 fsm.enter();
 
 var stdin = process.stdin;

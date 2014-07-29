@@ -2,12 +2,13 @@ var Rx = require('rx');
 var tryToGet = require('./tryToGet');
 var tryToCall = require('./tryToCall');
 
-function createImmortalSubject() {
-    var result = new Rx.Subject;
-    result.onError = function() {};
-    result.onCompleted = function() {};
-    return result;
+function Channel() {
+    Rx.Subject.apply(this, arguments);
 }
+
+Channel.prototype = Object.create(Rx.Subject.prototype);
+Channel.prototype.onCompleted = function() {};
+Channel.prototype.onError = function() {};
 
 function State(props, behavior, parent) {
     this._props = props;
@@ -18,11 +19,11 @@ function State(props, behavior, parent) {
 
 State.prototype = {
     get enters() {
-        if (!this._enters) { this._enters = createImmortalSubject(); }
+        if (!this._enters) { this._enters = new Channel; }
         return this._enters;
     },
     get exits() {
-        if (!this._exits) { this._exits = createImmortalSubject(); }
+        if (!this._exits) { this._exits = new Channel; }
         return this._exits;
     },
     update: function(behavior) {
@@ -100,11 +101,11 @@ function StateMachine(props, behavior, parent) {
 StateMachine.prototype = {
 
     get enters() {
-        if (!this._enters) { this._enters = createImmortalSubject(); }
+        if (!this._enters) { this._enters = new Channel; }
         return this._enters;
     },
     get exits() {
-        if (!this._exits) { this._exits = createImmortalSubject(); }
+        if (!this._exits) { this._exits = new Channel; }
         return this._exits;
     },
 
@@ -113,7 +114,7 @@ StateMachine.prototype = {
         var listOfChannels = props.channels || [];
         if (Array.isArray(listOfChannels)) {
             listOfChannels.forEach(function(name) {
-                result[name] = createImmortalSubject();
+                result[name] = new Channel;
             })
         }
         return result;
