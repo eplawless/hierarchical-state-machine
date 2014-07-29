@@ -2,6 +2,13 @@ var Rx = require('rx');
 var tryToGet = require('./tryToGet');
 var tryToCall = require('./tryToCall');
 
+function createImmortalSubject() {
+    var result = new Rx.Subject;
+    result.onError = function() {};
+    result.onCompleted = function() {};
+    return result;
+}
+
 function State(props, behavior, parent) {
     this._props = props;
     this._entered = false;
@@ -11,11 +18,11 @@ function State(props, behavior, parent) {
 
 State.prototype = {
     get enters() {
-        if (!this._enters) { this._enters = new Rx.Subject; }
+        if (!this._enters) { this._enters = createImmortalSubject(); }
         return this._enters;
     },
     get exits() {
-        if (!this._exits) { this._exits = new Rx.Subject; }
+        if (!this._exits) { this._exits = createImmortalSubject(); }
         return this._exits;
     },
     update: function(behavior) {
@@ -56,6 +63,10 @@ State.prototype = {
         if (canExit && !tryToCall(canExit, this, this))
             return false;
         return true;
+    },
+    getChannel: function(name) {
+        var parent = this.parent;
+        return tryToCall(tryToGet(parent, 'getChannel'), parent, name);
     }
 };
 
@@ -80,19 +91,37 @@ function StateMachine(props, behavior, parent) {
     this.currentStateName = null;
     this._nestedStateMachineFactories = this._createNestedStateMachineFactories(this._props.states);
     this._nestedStates = {};
+    this._channels = this._createChannels(this._props);
     this._isTransitioning = false;
     this._queuedEnters = [];
+    this._hasQueuedExit = false;
 }
 
 StateMachine.prototype = {
 
     get enters() {
-        if (!this._enters) { this._enters = new Rx.Subject; }
+        if (!this._enters) { this._enters = createImmortalSubject(); }
         return this._enters;
     },
     get exits() {
-        if (!this._exits) { this._exits = new Rx.Subject; }
+        if (!this._exits) { this._exits = createImmortalSubject(); }
         return this._exits;
+    },
+
+    _createChannels: function(props) {
+        var result = {};
+        var listOfChannels = props.channels || [];
+        if (Array.isArray(listOfChannels)) {
+            listOfChannels.forEach(function(name) {
+                result[name] = createImmortalSubject();
+            })
+        }
+        return result;
+    },
+
+    getChannel: function(name) {
+        var parent = this.parent;
+        return this._channels[name] || tryToCall(tryToGet(parent, 'getChannel'), parent, name);
     },
 
     _createNestedStateMachineFactories: function(states) {
@@ -109,15 +138,15 @@ StateMachine.prototype = {
     },
 
     enter: function() {
-        if (this.currentStateName) {
-            this.exit();
+        if (this._entered) {
+            return;
         }
         this._entered = true; // we set this flag here so we can transition more on the way in
         this._enters && this._enters.onNext();
         tryToCall(tryToGet(this, '_behavior', 'beforeEnter'), this, this, this.parent);
         tryToCall(tryToGet(this, '_props', 'onEnter'), this, this, this.parent);
-        this.transition(this._props.startState);
         tryToCall(tryToGet(this, '_behavior', 'afterEnter'), this, this, this.parent);
+        this.transition(this._props.startState);
     },
 
     _getOrCreateNestedState: function(stateName, stateProps, stateBehavior) {
@@ -143,13 +172,17 @@ StateMachine.prototype = {
         if (!this._entered) {
             return;
         }
+        if (this._isTransitioning) {
+            this._hasQueuedExit = true;
+            return;
+        }
         this._entered = false; // we set this flag here so we can't transition on the way out
-        tryToCall(tryToGet(this, '_behavior', 'beforeExit'), this, this, this.parent);
         this._exitNestedState(
             this.currentStateName,
             tryToGet(this, '_props', 'states', this.currentStateName),
             tryToGet(this, '_behavior', 'states', this.currentStateName)
         );
+        tryToCall(tryToGet(this, '_behavior', 'beforeExit'), this, this, this.parent);
         tryToCall(tryToGet(this, '_props', 'onExit'), this, this, this.parent);
         tryToCall(tryToGet(this, '_behavior', 'afterExit'), this, this, this.parent);
         this._exits && this._exits.onNext();
@@ -166,9 +199,11 @@ StateMachine.prototype = {
     },
 
     _runTransitionHandlers: function(lastStateName, nextStateName, lastNestedState, nextNestedState) {
-        var beforeTransition = tryToGet(this._behavior, 'states', lastStateName, 'beforeTransitionTo', nextStateName)
-        var onTransition = tryToGet(this._props, 'states', lastStateName, 'onTransitionTo', nextStateName)
-        var afterTransition = tryToGet(this._behavior, 'states', lastStateName, 'afterTransitionTo', nextStateName)
+        var lastStateProps = tryToGet(this._props, 'states', lastStateName);
+        var lastStateBehavior = tryToGet(this._behavior, 'states', lastStateName);
+        var beforeTransition = tryToGet(lastStateBehavior, 'beforeTransitionTo', nextStateName);
+        var onTransition = tryToGet(lastStateProps, 'onTransitionTo', nextStateName);
+        var afterTransition = tryToGet(lastStateBehavior, 'afterTransitionTo', nextStateName);
         tryToCall(beforeTransition, lastNestedState, lastNestedState, nextNestedState);
         tryToCall(onTransition, lastNestedState, lastNestedState, nextNestedState);
         tryToCall(afterTransition, lastNestedState, lastNestedState, nextNestedState);
@@ -251,7 +286,12 @@ StateMachine.prototype = {
                 nextStateBehavior
             );
         }
+
         this._isTransitioning = false;
+        if (this._hasQueuedExit) {
+            this._hasQueuedExit = false;
+            this.exit();
+        }
     }
 };
 

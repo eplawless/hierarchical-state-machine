@@ -236,6 +236,7 @@ var player = playerFactory.create({
 player.enter();
 */
 
+
 // Calculator example:
 // http://upload.wikimedia.org/wikipedia/en/a/a6/UML_state_machine_Fig2b.png
 
@@ -345,3 +346,4 @@ function clear() {
 
 calculator.enter();
 input('7/2=*4=');
+
