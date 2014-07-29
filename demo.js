@@ -26,8 +26,7 @@ var fsmFactory = new StateMachineFactory({
             onEnter: function(running) {
                 Rx.Observable.interval(100)
                     .takeUntil(running.exits)
-                    .select(function() { return Math.random(); })
-                    .where(function(value) { return value < 0.01 })
+                    .where(function() { return Math.random() < 0.01 })
                     .subscribe(running.getChannel('circuitBreakerExplosions'));
             }
         }
