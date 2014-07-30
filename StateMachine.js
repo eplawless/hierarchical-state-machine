@@ -1,6 +1,7 @@
 var Rx = require('rx');
 var tryToGet = require('./tryToGet');
 var tryToCall = require('./tryToCall');
+var NOOP = function() {};
 
 function Channel() {
     Rx.Subject.apply(this, arguments);
@@ -14,17 +15,14 @@ Channel.prototype = {
     defer: function(value) {
         this._deferredValues.push(value);
     },
-    subscribe: function() {
-        var result = this.__proto__.__proto__.subscribe.apply(this, arguments);
+    subscribe: function(onNext, onError, onCompleted) {
         if (this._deferredValues.length) {
-            var deferredValues = this._deferredValues.slice(0);
-            this._deferredValues.length = 0;
-            for (var idx = 0; idx < deferredValues.length; ++idx) {
-                var deferredValue = deferredValues[idx];
-                tryToCall(arguments[0], null, deferredValue);
-                tryToCall(tryToGet(arguments[0], 'onNext'), arguments[0], deferredValue);
-            }
+            var deferredValues = this._deferredValues;
+            Rx.Observable.fromArray(deferredValues)
+                .doAction(function() { return deferredValues.unshift(); })
+                .subscribe(onNext, onError, onCompleted);
         }
+        var result = this.__proto__.__proto__.subscribe.apply(this, arguments);
         return result;
     }
 };
@@ -48,6 +46,41 @@ State.prototype = {
     update: function(behavior) {
         this._behavior = behavior;
     },
+
+    _listenForEventTransitions: function() {
+        var parentState = this.parent;
+        var eventTransitions = tryToGet(this, '_props', 'eventTransitions');
+        for (var eventName in eventTransitions) {
+            var stateName = eventTransitions[eventName];
+            var observer = {
+                onNext: function(stateName) {
+                    tryToCall(tryToGet(parentState, 'transition'), parentState, stateName);
+                }.bind(null, stateName),
+                onError: NOOP,
+                onCompleted: function() {}
+            };
+            this.getChannel(eventName)
+                .take(1)
+                .takeUntil(this.exits)
+                .subscribe(observer);
+        }
+    },
+
+    _listenForDeferredEvents: function() {
+        var self = this;
+        var listOfDeferredEvents = tryToGet(this, '_props', 'deferEvents');
+        if (Array.isArray(listOfDeferredEvents)) {
+            listOfDeferredEvents.forEach(function(event) {
+                var eventChannel = self.getChannel(event);
+                eventChannel
+                    .takeUntil(self.exits)
+                    .subscribe(function(value) {
+                        eventChannel.defer(value);
+                    });
+            });
+        }
+    },
+
     enter: function() {
         if (!this.canBeEntered())
             return false;
@@ -56,6 +89,8 @@ State.prototype = {
         tryToCall(tryToGet(this, '_behavior', 'beforeEnter'), this, this, this.parent);
         tryToCall(tryToGet(this, '_props', 'onEnter'), this, this, this.parent);
         tryToCall(tryToGet(this, '_behavior', 'afterEnter'), this, this, this.parent);
+        this._listenForEventTransitions();
+        this._listenForDeferredEvents();
         return true;
     },
     exit: function() {
@@ -168,6 +203,34 @@ StateMachine.prototype = {
         return result;
     },
 
+    _listenForEventTransitions: function() {
+        var parentState = this.parent;
+        var eventTransitions = tryToGet(this, '_props', 'eventTransitions');
+        for (var event in eventTransitions) {
+            this.getChannel(event)
+                .take(1)
+                .takeUntil(this.exits)
+                .subscribe(function(stateName) {
+                    tryToCall(tryToGet(parentState, 'transition'), parentState, stateName);
+                }.bind(null, eventTransitions[event]));
+        }
+    },
+
+    _listenForDeferredEvents: function() {
+        var listOfDeferredEvents = tryToGet(this, '_props', 'deferEvents');
+        if (Array.isArray(listOfDeferredEvents)) {
+            for (var idx = 0; idx < listOfDeferredEvents.length; ++idx) {
+                var event = listOfDeferredEvents[idx];
+                var eventChannel = this.getChannel(event);
+                eventChannel
+                    .takeUntil(this.exits)
+                    .subscribe(function(value) {
+                        eventChannel.defer(value);
+                    });
+            }
+        }
+    },
+
     enter: function() {
         if (this._entered) {
             return;
@@ -179,6 +242,8 @@ StateMachine.prototype = {
         tryToCall(tryToGet(this, '_props', 'onEnter'), this, this, this.parent);
         tryToCall(tryToGet(this, '_behavior', 'afterEnter'), this, this, this.parent);
         this._isTransitioning = false;
+        this._listenForEventTransitions();
+        this._listenForDeferredEvents();
         if (this._queuedEnters.length) { // allow before/on/afterEnter to transition us first
             this.transition();
         } else {
