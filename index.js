@@ -174,31 +174,56 @@ operatorInService.onNext(true);
 diagnostics.onNext(true);
 */
 
-/*
 var playerFactory = new StateMachineFactory({
     startState: 'stopped',
+    channels: ['playRequests', 'stopRequests', 'errors', 'playEvents', 'stopEvents'],
+    //privateChannels: ['playEvents','stopEvents'],
+    onEnter: function(player) {
+        player.getChannel('stopRequests')
+            .subscribe(player.getChannel('stopEvents'));
+
+        player.getChannel('playEvents')
+            .subscribe(function() { player.transition('playing'); });
+
+        player.getChannel('stopEvents')
+            .subscribe(function(event) {
+                player.getChannel('stopEvents').defer(event);
+                player.transition('stopped');
+            });
+    },
     states: {
         stopped: {
             startState: 'idle',
+            allowSelfTransitions: true,
+            onEnter: function(stopped) {
+                stopped.getChannel('errors')
+                    .takeUntil(stopped.exits)
+                    .subscribe(function(errorEvent) {
+                        stopped.getChannel('errors').defer(errorEvent);
+                        stopped.transition('error');
+                    });
+            },
             states: {
-                idle: {
-                    onEnter: function(idleState, stoppedState) {
-                        stoppedState.transition('error');
-                    }
-                },
+                idle: {},
                 error: {
-                    onEnter: function(errorState, stoppedState) {
-                        var playerState = stoppedState.parent;
-                        Rx.Observable.timer(500)
-                            .takeUntil(errorState.exits)
-                            .subscribe(function() {
-                                playerState.transition('playing');
+                    onEnter: function(errorState) {
+                        errorState.getChannel('errors')
+                            .subscribe(function(errorEvent) {
+                                console.log('Got Error Event', JSON.stringify(errorEvent));
                             });
                     }
                 }
             }
         },
-        playing: {}
+        playing: {
+            onEnter: function(playing) {
+                playing.getChannel('errors')
+                    .subscribe(function(errorEvent) {
+                        playing.getChannel('errors').defer(errorEvent);
+                        playing.getChannel('stopRequests').onNext();
+                    });
+            }
+        }
     }
 });
 
@@ -234,9 +259,13 @@ var player = playerFactory.create({
 });
 
 player.enter();
-*/
+player.getChannel('errors').onNext({ message: 'wut' })
+player.getChannel('playEvents').onNext({ videoId: 12345 });
+player.getChannel('errors').onNext({ message: 'wut' })
+player.exit();
 
 
+/*
 // Calculator example:
 // http://upload.wikimedia.org/wikipedia/en/a/a6/UML_state_machine_Fig2b.png
 
@@ -248,38 +277,53 @@ function isDigitOrDot(key) {
     return /[0-9.]/.test(key);
 }
 
-var keyInput = new Rx.Subject;
-var clearInput = new Rx.Subject;
-
 var calculator = new StateMachine({
     startState: 'on',
+    channels: ['keyInput', 'clearInput'],
     allowSelfTransitions: true,
     states: {
+        onEnter: function(calculator) {
+            calculator.getChannel('clearInput')
+                .takeUntil(calculator.exits)
+                .subscribe(function() {
+                    calculator.transition('on');
+                })
+        },
         on: {
             startState: 'operand1',
             requireExplicitTransitions: true,
-            onEnter: function(onState, calculatorState) {
+            channels: ['setOperator', 'setOperand1', 'setOperand2'],
+            onEnter: function(onState) {
                 onState.operand1Digits = [];
                 onState.operand2Digits = [];
                 onState.operator = null;
-                clearInput
+
+                onState.getChannel('setOperand1')
                     .takeUntil(onState.exits)
-                    .subscribe(function() {
-                        calculatorState.transition('on');
-                    })
+                    .subscribe(function(operand1) { onState.operand1Digits = operand1; })
+
+                onState.getChannel('setOperand2')
+                    .takeUntil(onState.exits)
+                    .subscribe(function(operand2) { onState.operand2Digits = operand2; })
+
+                onState.getChannel('setOperator')
+                    .takeUntil(onState.exits)
+                    .subscribe(function(operator) { onState.operator = operator; })
             },
             states: {
                 operand1: {
                     allowTransitionsTo: ['operand2'],
-                    onEnter: function(operand1State, onState) {
-                        onState.operator = null;
+                    onEnter: function(operand1State) {
+                        operand1State.operator = null;
+                        operand1State.digits = [];
+
                         keyInput
                             .takeUntil(operand1State.exits)
                             .subscribe(function(key) {
                                 if (isDigitOrDot(key)) {
-                                    onState.operand1Digits.push(key);
+                                    operand1State.digits.push(key);
                                 } else if (isOperator(key)) {
-                                    onState.operator = key;
+                                    operand1State.operator = key;
                                     onState.transition('operand2')
                                 }
                             });
@@ -346,4 +390,5 @@ function clear() {
 
 calculator.enter();
 input('7/2=*4=');
+*/
 

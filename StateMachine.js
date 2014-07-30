@@ -4,11 +4,30 @@ var tryToCall = require('./tryToCall');
 
 function Channel() {
     Rx.Subject.apply(this, arguments);
+    this._deferredValues = [];
 }
 
-Channel.prototype = Object.create(Rx.Subject.prototype);
-Channel.prototype.onCompleted = function() {};
-Channel.prototype.onError = function() {};
+Channel.prototype = {
+    __proto__: Rx.Subject.prototype,
+    onCompleted: function() {},
+    onError: function() {},
+    defer: function(value) {
+        this._deferredValues.push(value);
+    },
+    subscribe: function() {
+        var result = this.__proto__.__proto__.subscribe.apply(this, arguments);
+        if (this._deferredValues.length) {
+            var deferredValues = this._deferredValues.slice(0);
+            this._deferredValues.length = 0;
+            for (var idx = 0; idx < deferredValues.length; ++idx) {
+                var deferredValue = deferredValues[idx];
+                tryToCall(arguments[0], null, deferredValue);
+                tryToCall(tryToGet(arguments[0], 'onNext'), arguments[0], deferredValue);
+            }
+        }
+        return result;
+    }
+};
 
 function State(props, behavior, parent) {
     this._props = props;
@@ -66,23 +85,14 @@ State.prototype = {
         return true;
     },
 
-    getParentChannel: function(name) {
+    getParentChannel: function(name, scope) {
         var parent = this.parent;
-        return tryToCall(tryToGet(parent, 'getChannel'), parent, name);
+        return tryToCall(tryToGet(parent, 'getChannel'), parent, name, scope);
     },
 
-    getReadOnlyParentChannel: function(name) {
-        var channel = this.getParentChannel(name);
-        return channel ? channel.takeUntil(this.exits) : channel;
-    },
-
-    getChannel: function(name) {
-        return this.getParentChannel(name);
-    },
-
-    getReadOnlyChannel: function(name) {
-        var channel = this.getChannel(name);
-        return channel ? channel.takeUntil(this.exits) : channel;
+    getChannel: function(name, scope) {
+        scope = scope || this;
+        return this.getParentChannel(name, scope);
     },
 };
 
@@ -135,23 +145,14 @@ StateMachine.prototype = {
         return result;
     },
 
-    getParentChannel: function(name) {
+    getParentChannel: function(name, scope) {
         var parent = this.parent;
-        return tryToCall(tryToGet(parent, 'getChannel'), parent, name);
+        return tryToCall(tryToGet(parent, 'getChannel'), parent, name, scope);
     },
 
-    getReadOnlyParentChannel: function(name) {
-        var channel = this.getParentChannel(name);
-        return channel ? channel.takeUntil(this.exits) : channel;
-    },
-
-    getChannel: function(name) {
-        return this._channels[name] || this.getParentChannel(name);
-    },
-
-    getReadOnlyChannel: function(name) {
-        var channel = this.getChannel(name);
-        return channel ? channel.takeUntil(this.exits) : channel;
+    getChannel: function(name, scope) {
+        scope = scope || this;
+        return this._channels[name] || this.getParentChannel(name, scope);
     },
 
     _createNestedStateMachineFactories: function(states) {
@@ -173,10 +174,16 @@ StateMachine.prototype = {
         }
         this._entered = true; // we set this flag here so we can transition more on the way in
         this._enters && this._enters.onNext();
+        this._isTransitioning = true;
         tryToCall(tryToGet(this, '_behavior', 'beforeEnter'), this, this, this.parent);
         tryToCall(tryToGet(this, '_props', 'onEnter'), this, this, this.parent);
         tryToCall(tryToGet(this, '_behavior', 'afterEnter'), this, this, this.parent);
-        this.transition(this._props.startState);
+        this._isTransitioning = false;
+        if (this._queuedEnters.length) { // allow before/on/afterEnter to transition us first
+            this.transition();
+        } else {
+            this.transition(this._props.startState);
+        }
     },
 
     _getOrCreateNestedState: function(stateName, stateProps, stateBehavior) {
@@ -282,14 +289,16 @@ StateMachine.prototype = {
         }
         var props = this._props;
         var behavior = this._behavior;
-        if (this._isTransitioning) {
+        if (this._isTransitioning && stateName) {
             this._queuedEnters.push(stateName);
             return;
         }
 
         this._isTransitioning = true;
 
-        this._queuedEnters.push(stateName);
+        if (stateName) {
+            this._queuedEnters.push(stateName);
+        }
         while (this._queuedEnters.length) {
             var lastStateName = this.currentStateName;
             var nextStateName = this._queuedEnters.shift();
