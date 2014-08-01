@@ -49,9 +49,9 @@ State.prototype = {
 
     _listenForEventTransitions: function() {
         var parentState = this.parent;
-        var eventTransitions = tryToGet(this, '_props', 'eventTransitions');
-        for (var eventName in eventTransitions) {
-            var stateName = eventTransitions[eventName];
+        var transitionOnEvents = tryToGet(this, '_props', 'transitionOnEvents');
+        for (var eventName in transitionOnEvents) {
+            var stateName = transitionOnEvents[eventName];
             var observer = {
                 onNext: function(stateName) {
                     tryToCall(tryToGet(parentState, 'transition'), parentState, stateName);
@@ -205,14 +205,14 @@ StateMachine.prototype = {
 
     _listenForEventTransitions: function() {
         var parentState = this.parent;
-        var eventTransitions = tryToGet(this, '_props', 'eventTransitions');
-        for (var event in eventTransitions) {
+        var transitionOnEvents = tryToGet(this, '_props', 'transitionOnEvents');
+        for (var event in transitionOnEvents) {
             this.getChannel(event)
                 .take(1)
                 .takeUntil(this.exits)
                 .subscribe(function(stateName) {
                     tryToCall(tryToGet(parentState, 'transition'), parentState, stateName);
-                }.bind(null, eventTransitions[event]));
+                }.bind(null, transitionOnEvents[event]));
         }
     },
 

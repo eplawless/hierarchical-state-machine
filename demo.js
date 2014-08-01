@@ -46,7 +46,9 @@ var fsm = fsmFactory.create({
 
         fsm.getChannel('circuitBreakerExplosions')
             .takeUntil(fsm.exits)
-            .subscribe(function() { console.log('circuit breaker exploded!') });
+            .subscribe(function() {
+                console.log('circuit breaker exploded!')
+            });
     },
     beforeExit: function() { console.log('exiting fsm'); },
     states: {
