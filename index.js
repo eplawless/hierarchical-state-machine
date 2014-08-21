@@ -179,13 +179,18 @@ var playerFactory = new StateMachineFactory({
     channels: ['playRequests', 'stopRequests', 'errors', 'playEvents', 'stopEvents'],
     //privateChannels: ['playEvents','stopEvents'],
     onEnter: function(player) {
+        // We want to be able to do additional logic in response to a stop request
+        // before we actually stop the player.
         player.getChannel('stopRequests')
+            .takeUntil(player.exits)
             .subscribe(player.getChannel('stopEvents'));
 
         player.getChannel('playEvents')
+            .takeUntil(player.exits)
             .subscribe(function() { player.transition('playing'); });
 
         player.getChannel('stopEvents')
+            .takeUntil(player.exits)
             .subscribe(function(event) {
                 player.getChannel('stopEvents').defer(event);
                 player.transition('stopped');
@@ -208,6 +213,7 @@ var playerFactory = new StateMachineFactory({
                 error: {
                     onEnter: function(errorState) {
                         errorState.getChannel('errors')
+                            .takeUntil(errorState.exits)
                             .subscribe(function(errorEvent) {
                                 console.log('Got Error Event', JSON.stringify(errorEvent));
                             });
@@ -218,7 +224,10 @@ var playerFactory = new StateMachineFactory({
         playing: {
             onEnter: function(playing) {
                 playing.getChannel('errors')
+                    .takeUntil(playing.exits)
                     .subscribe(function(errorEvent) {
+                        // Required to comment where you intend the deferred event to end up
+                        // Should be handled by the stop state
                         playing.getChannel('errors').defer(errorEvent);
                         playing.getChannel('stopRequests').onNext();
                     });
