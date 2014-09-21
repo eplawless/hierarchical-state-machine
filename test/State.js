@@ -1,6 +1,7 @@
 var expect = require('expect')
 var sinon = require('sinon')
 var State = require('State')
+var Rx = require('rx');
 
 describe('State', function() {
 
@@ -171,4 +172,153 @@ describe('State', function() {
         })
 
     })
+
+    describe('#canEnter', function() {
+
+        it('is a method', function() {
+            expect(State.prototype.canEnter).toBeA(Function);
+        })
+
+        it('returns whether we are currently able to enter this state', function() {
+            var s = new State;
+            expect(s.canEnter()).toBe(true);
+        })
+
+        it('returns false if the state is already entered', function() {
+            var s = new State;
+            expect(s.canEnter()).toBe(true);
+            s.enter();
+            expect(s.canEnter()).toBe(false);
+        })
+
+        it('invokes the canEnter function from its properties object, if it\'s provided', function() {
+            var s = new State({
+                canEnter: function() { return false; }
+            });
+            expect(s.canEnter()).toBe(false);
+        })
+
+    })
+
+    describe('#canExit', function() {
+
+        it('is a method', function() {
+            expect(State.prototype.canExit).toBeA(Function);
+        })
+
+        it('returns whether we are currently able to exit this state', function() {
+            var s = new State;
+            expect(s.canExit()).toBe(false);
+        })
+
+        it('returns false if the state is not currently entered', function() {
+            var s = new State;
+            expect(s.canExit()).toBe(false);
+            s.enter();
+            expect(s.canExit()).toBe(true);
+        })
+
+        it('invokes the canExit function from its properties object, if it\'s provided', function() {
+            var s = new State({
+                canExit: function() { return false; }
+            });
+            expect(s.canExit()).toBe(false);
+            s.enter();
+            expect(s.canExit()).toBe(false);
+        })
+
+    })
+
+    var getEventMethods = ['getEvent', 'getParentEvent'];
+
+    for (var idx in getEventMethods) {
+
+        var method = getEventMethods[idx];
+
+        describe('#'+method, function() {
+
+            it('is a method', function() {
+                expect(State.prototype[method]).toBeA(Function);
+            })
+
+            it('tries to return the result of its parent\'s getEvent method', function() {
+                var parent = {
+                    getEvent: function(name) { return { name: name }; }
+                };
+                var s = new State({}, {}, parent);
+                var event = s[method]('test');
+                expect(event).toBeA(Object);
+                expect(event.name).toBe('test');
+            })
+
+            it('returns undefined if it doesn\'t have a parent', function() {
+                var s = new State;
+                expect(s[method]('test')).toBe(undefined);
+            })
+
+        })
+
+    }
+
+    describe('.enters', function() {
+
+        it('is an Observable', function() {
+            var s = new State;
+            expect(s.enters).toBeA(Rx.Observable);
+        })
+
+        it('fires when the state is entered, just before the beforeEnter callback', function() {
+            var calls = "";
+            var s = new State({}, {
+                beforeEnter: function() { calls += "2"; }
+            });
+            s.enters.subscribe(function(data) { calls += "1"; });
+            expect(calls).toBe("");
+            s.enter();
+            expect(calls).toBe("12");
+        })
+
+        it('is passed any data given to the #enter method', function() {
+            var s = new State;
+            var onEnter = sinon.spy();
+            var data = { x: 1 };
+            s.enters.subscribe(onEnter);
+            s.enter(data);
+            expect(onEnter.calledWith(data)).toBe(true);
+        })
+
+    })
+
+    describe('.exits', function() {
+
+        it('is an Observable', function() {
+            var s = new State;
+            expect(s.exits).toBeA(Rx.Observable);
+        })
+
+        it('fires when the state is exited, just after the beforeExit callback', function() {
+            var calls = "";
+            var s = new State({}, {
+                beforeExit: function() { calls += "1"; }
+            });
+            s.exits.subscribe(function(data) { calls += "2"; });
+            s.enter();
+            expect(calls).toBe("");
+            s.exit();
+            expect(calls).toBe("12");
+        })
+
+        it('is passed any data given to the #exit method', function() {
+            var s = new State;
+            var onExit = sinon.spy();
+            var data = { x: 1 };
+            s.exits.subscribe(onExit);
+            s.enter();
+            expect(onExit.called).toBe(false);
+            s.exit(data);
+            expect(onExit.calledWith(data)).toBe(true);
+        })
+
+    })
+
 })
