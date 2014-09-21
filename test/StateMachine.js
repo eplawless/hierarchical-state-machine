@@ -1,6 +1,7 @@
 var expect = require('expect')
 var sinon = require('sinon')
 var StateMachine = require('StateMachine')
+var Rx = require('rx');
 
 describe('StateMachine', function() {
 

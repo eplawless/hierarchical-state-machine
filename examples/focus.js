@@ -1,25 +1,26 @@
 var StateMachine = require('../StateMachine');
 
-function blur() { console.log('blurring!'); }
-function focus() { console.log('focusing!'); }
+function print() { return console.log.apply(console, arguments); }
+function justPrint(value) { return function() { console.log(value); } }
 
 var focus = new StateMachine({
-    events: ['focus', 'blur'],
+    states: ['focused', 'blurred'],
+    events: ['focus', 'blur', 'spin'],
     startStateName: 'blurred',
-    transitionsByEvent: {
-        'focus': 'focused',
-        'blur': 'blurred'
-    },
-    states: {
-        focused: { onEnter: focus },
-        blurred: { onEnter: blur },
-    }
+    transitions: [
+        { event: 'focus', to: 'focused' },
+        { event: 'blur', to: 'blurred' },
+    ],
 });
+
+focus.enters.subscribe(justPrint('enter!'))
+focus.transitions.subscribe(print);
+focus.exits.subscribe(justPrint('exit!'))
 
 focus.enter();
 focus.fireEvent('blur');
 focus.fireEvent('focus');
 focus.fireEvent('focus');
 focus.fireEvent('blur');
+focus.transition('focused');
 focus.exit();
-

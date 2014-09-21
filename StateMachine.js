@@ -8,7 +8,15 @@ function StateMachine(props, behavior, parent) {
     this.enter = this.enter.bind(this);
     this.transition = this.transition.bind(this);
     this._props = (props && typeof props === 'object') ? props : {};
-    this._props.states = (this._props.states && typeof this._props.states === 'object') ? this._props.states : {};
+    var states = this._props.states;
+    if (Array.isArray(states)) {
+        this._props.states = {};
+        for (var idx = 0; idx < states.length; ++idx) {
+            this._props.states[states[idx]] = {};
+        }
+    } else {
+        this._props.states = this._props.states || {};
+    }
     if (!('startStateName' in this._props)) {
         throw new Error('StateMachine requires startStateName property');
     }
@@ -38,9 +46,15 @@ StateMachine.prototype = {
         if (!this._enters) { this._enters = new Event; }
         return this._enters;
     },
+
     get exits() {
         if (!this._exits) { this._exits = new Event; }
         return this._exits;
+    },
+
+    get transitions() {
+        if (!this._transitions) { this._transitions = new Event; }
+        return this._transitions;
     },
 
     _createEvents: function(props) {
@@ -89,12 +103,69 @@ StateMachine.prototype = {
         return result;
     },
 
+    _getValidEvents: function() {
+        var events = this._props.events || [];
+        var parent = this.parent;
+        if (parent && parent._getValidEvents) {
+            return events.concat(parent._getValidEvents());
+        } else {
+            return events;
+        }
+    },
+
+    _getValidStates: function() {
+        var states = this._props.states || {};
+        return Object.keys(states);
+    },
+
+    _getInvalidStateError: function(transition, state, stateType) {
+        return new Error("StateMachine Error: Transition " + JSON.stringify(transition) + "\n" +
+            "  Invalid " + stateType + " state: " + state + "\n" +
+            "  Valid states: " + this._getValidStates().join(', '));
+    },
+
+    _getInvalidEventError: function(transition, event) {
+        return new Error("StateMachine Error: Transition " + JSON.stringify(transition) + "\n" +
+            "  Invalid event: " + event + "\n" +
+            "  Valid events: " + this._getValidEvents().join(', '));
+    },
+
+    _getMissingToStateError: function(transition) {
+        return new Error("StateMachine Error: Transition " + JSON.stringify(transition) + "\n" +
+            "  Missing 'to' state.");
+    },
+
     _listenForEventTransitions: function() {
-        var transitionsByEvent = tryToGet(this, '_props', 'transitionsByEvent');
-        for (var event in transitionsByEvent) {
-            this.getEvent(event)
+        var self = this;
+        var transitions = this._props.transitions;
+        for (var idxTransition in transitions) {
+            var transition = transitions[idxTransition];
+            var event = transition.event;
+            var from = transition.from;
+            var to = transition.to;
+
+            var eventStream = this.getEvent(event);
+            if (!eventStream) {
+                throw this._getInvalidEventError(transition, event);
+            }
+            if (from && !this._props.states[from]) {
+                throw this._getInvalidStateError(transition, from, 'from');
+            }
+            if (!to) {
+                throw this._getMissingToStateError(transition);
+            }
+            if (to && !this._props.states[to]) {
+                throw this._getInvalidStateError(transition, to, 'to');
+            }
+            if (from) {
+                eventStream = eventStream
+                    .where(function isInFromState(from) {
+                        return self.currentStateName === from;
+                    }.bind(null, from));
+            }
+            eventStream
                 .takeUntil(this.exits)
-                .subscribe(this.transition.bind(this, transitionsByEvent[event]));
+                .subscribe(this.transition.bind(this, to));
         }
     },
 
@@ -145,6 +216,7 @@ StateMachine.prototype = {
             return;
         }
         this._entered = false; // we set this flag here so we can't transition on the way out
+        this._transitions && this._transitions.onNext({ from: this.currentStateName, to: null });
         this._exitNestedState(
             this.currentStateName,
             tryToGet(this, '_props', 'states', this.currentStateName),
@@ -169,6 +241,7 @@ StateMachine.prototype = {
     _runTransitionHandlers: function(lastStateName, nextStateName, lastNestedState, nextNestedState) {
         var lastStateProps = tryToGet(this._props, 'states', lastStateName);
         var lastStateBehavior = tryToGet(this._behavior, 'states', lastStateName);
+        this._transitions && this._transitions.onNext({ from: lastStateName, to: nextStateName });
         var beforeTransition = tryToGet(lastStateBehavior, 'beforeTransitionTo', nextStateName);
         var onTransition = tryToGet(lastStateProps, 'onTransitionTo', nextStateName);
         var afterTransition = tryToGet(lastStateBehavior, 'afterTransitionTo', nextStateName);
