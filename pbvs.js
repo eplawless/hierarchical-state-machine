@@ -14,10 +14,10 @@ function print() {
 }
 
 var focusFsm = new StateMachine({
-    startState: 'blurred',
-    channels: ['pbvs', 'toggles'],
+    startStateName: 'blurred',
+    events: ['pbvs', 'toggles'],
     onEnter: function(focusState) {
-        focusState.getChannel('toggles')
+        focusState.getEvent('toggles')
             .takeUntil(focusState.exits)
             .subscribe(function() {
                 var isFocused = (focusState.currentStateName === 'focused');
@@ -27,20 +27,20 @@ var focusFsm = new StateMachine({
     states: {
         focused: {
             onEnter: function(focusedState) {
-                focusedState.getChannel('pbvs')
+                focusedState.getEvent('pbvs')
                     .onNext(getPbvsForSetFocused(true));
             }
         },
         blurred: {
             onEnter: function(blurredState) {
-                blurredState.getChannel('pbvs')
+                blurredState.getEvent('pbvs')
                     .onNext(getPbvsForSetFocused(false));
             }
         }
     }
 });
 
-focusFsm.getChannel('pbvs').subscribe(print);
+focusFsm.getEvent('pbvs').subscribe(print);
 
 var stdin = process.stdin;
 stdin.setRawMode( true );
@@ -48,7 +48,7 @@ stdin.resume();
 stdin.setEncoding( 'utf8' );
 stdin.on('data', function(key) {
     if (key === '\u0003') process.exit();
-    else focusFsm.getChannel('toggles').onNext();
+    else focusFsm.getEvent('toggles').onNext();
 });
 
 focusFsm.enter();

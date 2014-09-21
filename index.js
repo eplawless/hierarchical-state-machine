@@ -4,12 +4,13 @@ var StateMachineFactory = require('./StateMachineFactory');
 var NOOP = function() {};
 
 var animatedStateMachineFactory = new StateMachineFactory({
-    startState: 'start',
+    startStateName: 'start',
     requireExplicitTransitions: true,
     states: {
         start: {
             allowTransitionsTo: ['animating'],
-            onEnter: function(startState, topLevelState) {
+            onEnter: function(startState) {
+                var topLevelState = startState.parent;
                 topLevelState.value = 0;
                 topLevelState.interval = 1;
                 topLevelState.timeout = 100;
@@ -18,6 +19,7 @@ var animatedStateMachineFactory = new StateMachineFactory({
         animating: {
             allowTransitionsTo: ['end'],
             onEnter: function(animatingState, topLevelState) {
+                var topLevelState = animatingState.parent;
                 var interval = Rx.Observable.interval(topLevelState.interval);
                 var timer = Rx.Observable.timer(topLevelState.timeout);
                 var transitionToEnd = topLevelState.transition.bind(topLevelState, 'end');
@@ -36,8 +38,9 @@ var animatedStateMachine = animatedStateMachineFactory.create({
     beforeExit: function() { console.log('animation stopped') },
     states: {
         start: {
-            afterEnter: function(startState, topLevelState) {
+            afterEnter: function(startState) {
                 console.log('entered')
+                topLevelState = startState.parent;
                 topLevelState.value = 30;
                 topLevelState.timeout = 700;
             },
@@ -48,7 +51,8 @@ var animatedStateMachine = animatedStateMachineFactory.create({
             }
         },
         animating: {
-            afterExit: function(animatingState, topLevelState) {
+            afterExit: function(animatingState) {
+                var topLevelState = animatingState.parent;
                 console.log('finished animating with value', topLevelState.value)
             }
         }
@@ -66,7 +70,7 @@ setTimeout(function() {
 /*
 function getFsmFactory(switchovers, faultTriggers, diagnostics, operatorInService) {
     return new StateMachineFactory({
-        startState: 'inService',
+        startStateName: 'inService',
         states: {
             inService: {
                 onEnter: function(inServiceState, topLevelState) {
@@ -76,7 +80,7 @@ function getFsmFactory(switchovers, faultTriggers, diagnostics, operatorInServic
                             topLevelState.transition('outOfService')
                         });
                 },
-                startState: 'standby',
+                startStateName: 'standby',
                 states: {
                     standby: {
                         onEnter: function(standbyState, inServiceState) {
@@ -99,7 +103,7 @@ function getFsmFactory(switchovers, faultTriggers, diagnostics, operatorInServic
                 }
             },
             outOfService: {
-                startState: 'suspect',
+                startStateName: 'suspect',
                 states: {
                     suspect: {
                         onEnter: function(suspectState, outOfServiceState) {
@@ -172,106 +176,6 @@ operatorInService.onNext(true);
 diagnostics.onNext(true);
 */
 
-var playerFactory = new StateMachineFactory({
-    startState: 'stopped',
-    channels: ['playRequests', 'stopRequests', 'errors', 'playEvents', 'stopEvents'],
-    //privateChannels: ['playEvents','stopEvents'],
-    onEnter: function(player) {
-        // We want to be able to do additional logic in response to a stop request
-        // before we actually stop the player.
-        player.getChannel('stopRequests')
-            .takeUntil(player.exits)
-            .subscribe(player.getChannel('stopEvents'));
-
-        player.getChannel('playEvents')
-            .takeUntil(player.exits)
-            .subscribe(function() { player.transition('playing'); });
-
-        player.getChannel('stopEvents')
-            .takeUntil(player.exits)
-            .subscribe(function(event) {
-                player.getChannel('stopEvents').defer(event);
-                player.transition('stopped');
-            });
-    },
-    states: {
-        stopped: {
-            startState: 'idle',
-            allowSelfTransitions: true,
-            onEnter: function(stopped) {
-                stopped.getChannel('errors')
-                    .takeUntil(stopped.exits)
-                    .subscribe(function(errorEvent) {
-                        stopped.getChannel('errors').defer(errorEvent);
-                        stopped.transition('error');
-                    });
-            },
-            states: {
-                idle: {},
-                error: {
-                    onEnter: function(errorState) {
-                        errorState.getChannel('errors')
-                            .takeUntil(errorState.exits)
-                            .subscribe(function(errorEvent) {
-                                console.log('Got Error Event', JSON.stringify(errorEvent));
-                            });
-                    }
-                }
-            }
-        },
-        playing: {
-            onEnter: function(playing) {
-                playing.getChannel('errors')
-                    .takeUntil(playing.exits)
-                    .subscribe(function(errorEvent) {
-                        // Required to comment where you intend the deferred event to end up
-                        // Should be handled by the stop state
-                        playing.getChannel('errors').defer(errorEvent);
-                        playing.getChannel('stopRequests').onNext();
-                    });
-            }
-        }
-    }
-});
-
-var player = playerFactory.create({
-    beforeEnter: function() { console.log('about to start up player') },
-    afterEnter: function() { console.log('started up player') },
-    beforeExit: function() { console.log('about to shut down player') },
-    afterExit: function() { console.log('player was just shut down') },
-    states: {
-        stopped: {
-            beforeEnter: function() { console.log('entering stopped state') },
-            afterEnter: function() { console.log('entered stopped state') },
-            beforeExit: function() { console.log('exiting stopped state') },
-            states: {
-                idle: {
-                    beforeEnter: function() { console.log('entering stopped.idle state') },
-                    beforeExit: function() { console.log('exiting stopped.idle state') },
-                    beforeTransitionTo: {
-                        error: function() { console.log('moving from stopped.idle to stopped.error') }
-                    }
-                },
-                error: {
-                    beforeEnter: function() { console.log('entering stopped.error state') },
-                    beforeExit: function() { console.log('exiting stopped.error state') }
-                }
-            }
-        },
-        playing: {
-            beforeEnter: function() { console.log('entering playing state') },
-            beforeExit: function() { console.log('exiting playing state') }
-        }
-    }
-});
-
-player.enter();
-player.getChannel('errors').onNext({ message: 'wut' })
-player.getChannel('playEvents').onNext({ videoId: 12345 });
-player.getChannel('errors').onNext({ message: 'wut' })
-player.exit();
-
-
 /*
 // Calculator example:
 // http://upload.wikimedia.org/wikipedia/en/a/a6/UML_state_machine_Fig2b.png
@@ -285,35 +189,35 @@ function isDigitOrDot(key) {
 }
 
 var calculator = new StateMachine({
-    startState: 'on',
-    channels: ['keyInput', 'clearInput'],
+    startStateName: 'on',
+    events: ['keyInput', 'clearInput'],
     allowSelfTransitions: true,
     states: {
         onEnter: function(calculator) {
-            calculator.getChannel('clearInput')
+            calculator.getEvent('clearInput')
                 .takeUntil(calculator.exits)
                 .subscribe(function() {
                     calculator.transition('on');
                 })
         },
         on: {
-            startState: 'operand1',
+            startStateName: 'operand1',
             requireExplicitTransitions: true,
-            channels: ['setOperator', 'setOperand1', 'setOperand2'],
+            events: ['setOperator', 'setOperand1', 'setOperand2'],
             onEnter: function(onState) {
                 onState.operand1Digits = [];
                 onState.operand2Digits = [];
                 onState.operator = null;
 
-                onState.getChannel('setOperand1')
+                onState.getEvent('setOperand1')
                     .takeUntil(onState.exits)
                     .subscribe(function(operand1) { onState.operand1Digits = operand1; })
 
-                onState.getChannel('setOperand2')
+                onState.getEvent('setOperand2')
                     .takeUntil(onState.exits)
                     .subscribe(function(operand2) { onState.operand2Digits = operand2; })
 
-                onState.getChannel('setOperator')
+                onState.getEvent('setOperator')
                     .takeUntil(onState.exits)
                     .subscribe(function(operator) { onState.operator = operator; })
             },

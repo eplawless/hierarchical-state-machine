@@ -1,6 +1,6 @@
 var tryToGet = require('./tryToGet');
 var tryToCall = require('./tryToCall');
-var Channel = require('./Channel');
+var Event = require('./Event');
 var State = require('./State');
 
 function StateMachine(props, behavior, parent) {
@@ -24,7 +24,7 @@ function StateMachine(props, behavior, parent) {
     this.currentStateName = null;
     this._nestedStateMachineFactories = this._createNestedStateMachineFactories(this._props.states);
     this._nestedStates = {};
-    this._channels = this._createChannels(this._props);
+    this._events = this._createEvents(this._props);
     this._isTransitioning = false;
     this._queuedEnters = [];
     this._hasQueuedExit = false;
@@ -35,33 +35,33 @@ StateMachine.prototype = {
     currentStateName: null,
 
     get enters() {
-        if (!this._enters) { this._enters = new Channel; }
+        if (!this._enters) { this._enters = new Event; }
         return this._enters;
     },
     get exits() {
-        if (!this._exits) { this._exits = new Channel; }
+        if (!this._exits) { this._exits = new Event; }
         return this._exits;
     },
 
-    _createChannels: function(props) {
+    _createEvents: function(props) {
         var result = {};
-        var listOfChannels = props.channels || [];
-        if (Array.isArray(listOfChannels)) {
-            listOfChannels.forEach(function(name) {
-                result[name] = new Channel;
+        var listOfEvents = props.events || [];
+        if (Array.isArray(listOfEvents)) {
+            listOfEvents.forEach(function(name) {
+                result[name] = new Event;
             })
         }
         return result;
     },
 
-    getParentChannel: function(name, scope) {
+    getParentEvent: function(name, scope) {
         var parent = this.parent;
-        return tryToCall(tryToGet(parent, 'getChannel'), parent, name, scope);
+        return tryToCall(tryToGet(parent, 'getEvent'), parent, name, scope);
     },
 
-    getChannel: function(name, scope) {
+    getEvent: function(name, scope) {
         scope = scope || this;
-        return this._channels[name] || this.getParentChannel(name, scope);
+        return this._events[name] || this.getParentEvent(name, scope);
     },
 
     _createNestedStateMachineFactories: function(states) {
@@ -81,7 +81,7 @@ StateMachine.prototype = {
         var parentState = this.parent;
         var transitionOnEvents = tryToGet(this, '_props', 'transitionOnEvents');
         for (var event in transitionOnEvents) {
-            this.getChannel(event)
+            this.getEvent(event)
                 .takeUntil(this.exits)
                 .subscribe(function(stateName) {
                     tryToCall(tryToGet(parentState, 'transition'), parentState, stateName);

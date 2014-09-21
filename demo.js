@@ -4,22 +4,22 @@ var StateMachineFactory = require('./StateMachineFactory');
 
 var fsmFactory = new StateMachineFactory({
     startStateName: 'notRunning',
-    channels: ['buttonPresses', 'runCommands', 'circuitBreakerExplosions'],
+    events: ['buttonPresses', 'runCommands', 'circuitBreakerExplosions'],
     onEnter: function(fsm) {
-        fsm.getChannel('runCommands')
+        fsm.getEvent('runCommands')
             .takeUntil(fsm.exits)
             .subscribe(function() { fsm.transition('running'); });
 
-        fsm.getChannel('circuitBreakerExplosions')
+        fsm.getEvent('circuitBreakerExplosions')
             .takeUntil(fsm.exits)
             .subscribe(function() { fsm.transition('notRunning'); });
     },
     states: {
         notRunning: {
             onEnter: function(notRunning) {
-                notRunning.getChannel('buttonPresses')
+                notRunning.getEvent('buttonPresses')
                     .takeUntil(notRunning.exits)
-                    .subscribe(notRunning.getChannel('runCommands'));
+                    .subscribe(notRunning.getEvent('runCommands'));
             }
         },
         running: {
@@ -27,7 +27,7 @@ var fsmFactory = new StateMachineFactory({
                 Rx.Observable.interval(100)
                     .takeUntil(running.exits)
                     .where(function() { return Math.random() < 0.01 })
-                    .subscribe(running.getChannel('circuitBreakerExplosions'));
+                    .subscribe(running.getEvent('circuitBreakerExplosions'));
             }
         }
     }
@@ -36,15 +36,15 @@ var fsmFactory = new StateMachineFactory({
 var fsm = fsmFactory.create({
     beforeEnter: function(fsm) {
         console.log('entering fsm');
-        fsm.getChannel('buttonPresses')
+        fsm.getEvent('buttonPresses')
             .takeUntil(fsm.exits)
             .subscribe(function() { console.log('button pressed!') });
 
-        fsm.getChannel('runCommands')
+        fsm.getEvent('runCommands')
             .takeUntil(fsm.exits)
             .subscribe(function() { console.log('running!') });
 
-        fsm.getChannel('circuitBreakerExplosions')
+        fsm.getEvent('circuitBreakerExplosions')
             .takeUntil(fsm.exits)
             .subscribe(function() {
                 console.log('circuit breaker exploded!')
@@ -80,5 +80,5 @@ stdin.on('data', function(key) {
     if (key === '\u0003') process.exit();
     else if (key === 'q') fsm.exit();
     else if (key === 'e') fsm.enter();
-    else fsm.getChannel('buttonPresses').onNext();
+    else fsm.getEvent('buttonPresses').onNext();
 });

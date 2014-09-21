@@ -1,14 +1,14 @@
 var Rx = require('rx');
 
-function Channel() {
+function Event() {
     Rx.Subject.apply(this, arguments);
 }
 
-Channel.prototype = {
+Event.prototype = {
     __proto__: Rx.Subject.prototype,
     onCompleted: function() {},
     onError: function() {}
 };
 
-module.exports = Channel;
+module.exports = Event;
 

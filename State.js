@@ -1,6 +1,6 @@
 var tryToGet = require('./tryToGet');
 var tryToCall = require('./tryToCall');
-var Channel = require('./Channel');
+var Event = require('./Event');
 var NOOP = function() {};
 
 /**
@@ -39,7 +39,7 @@ State.prototype = {
      * @type {Observable}
      */
     get enters() {
-        if (!this._enters) { this._enters = new Channel; }
+        if (!this._enters) { this._enters = new Event; }
         return this._enters;
     },
 
@@ -48,7 +48,7 @@ State.prototype = {
      * @type {Observable}
      */
     get exits() {
-        if (!this._exits) { this._exits = new Channel; }
+        if (!this._exits) { this._exits = new Event; }
         return this._exits;
     },
 
@@ -74,7 +74,7 @@ State.prototype = {
                 onError: NOOP,
                 onCompleted: NOOP
             };
-            this.getChannel(eventName)
+            this.getEvent(eventName)
                 .takeUntil(this.exits)
                 .subscribe(observer);
         }
@@ -157,13 +157,13 @@ State.prototype = {
         return true;
     },
 
-    getChannel: function(name, scope) {
-        return this.getParentChannel(name, scope || this);
+    getEvent: function(name, scope) {
+        return this.getParentEvent(name, scope || this);
     },
 
-    getParentChannel: function(name, scope) {
+    getParentEvent: function(name, scope) {
         var parent = this.parent;
-        return tryToCall(tryToGet(parent, 'getChannel'), parent, name, scope);
+        return tryToCall(tryToGet(parent, 'getEvent'), parent, name, scope);
     },
 
 };
