@@ -54,14 +54,13 @@ StateMachine.prototype = {
         return result;
     },
 
-    getParentEvent: function(name, scope) {
+    getParentEvent: function(name) {
         var parent = this.parent;
-        return tryToCall(tryToGet(parent, 'getEvent'), parent, name, scope);
+        return tryToCall(tryToGet(parent, 'getEvent'), parent, name);
     },
 
-    getEvent: function(name, scope) {
-        scope = scope || this;
-        return this._events[name] || this.getParentEvent(name, scope);
+    getEvent: function(name) {
+        return this._events[name] || this.getParentEvent(name);
     },
 
     _createNestedStateMachineFactories: function(states) {
@@ -78,14 +77,11 @@ StateMachine.prototype = {
     },
 
     _listenForEventTransitions: function() {
-        var parentState = this.parent;
         var transitionOnEvents = tryToGet(this, '_props', 'transitionOnEvents');
         for (var event in transitionOnEvents) {
             this.getEvent(event)
                 .takeUntil(this.exits)
-                .subscribe(function(stateName) {
-                    tryToCall(tryToGet(parentState, 'transition'), parentState, stateName);
-                }.bind(null, transitionOnEvents[event]));
+                .subscribe(this.transition.bind(this, transitionOnEvents[event]));
         }
     },
 
