@@ -10,7 +10,7 @@ function justPrint(value) {
 
 var fsmFactory = new StateMachineFactory({
     channels: ['event1','event2'],
-    startState: 'state1',
+    startStateName: 'state1',
     states: {
         state1: { deferEvents: ['event1'], transitionOnEvents: { event2: 'state2' } },
         state2: { deferEvents: ['event1'], transitionOnEvents: { event2: 'state3' } },

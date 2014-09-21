@@ -3,7 +3,7 @@ var Rx = require('rx');
 var StateMachineFactory = require('./StateMachineFactory');
 
 var fsmFactory = new StateMachineFactory({
-    startState: 'notRunning',
+    startStateName: 'notRunning',
     channels: ['buttonPresses', 'runCommands', 'circuitBreakerExplosions'],
     onEnter: function(fsm) {
         fsm.getChannel('runCommands')

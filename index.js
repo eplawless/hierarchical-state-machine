@@ -2,7 +2,6 @@ var Rx = require('rx');
 var StateMachine = require('./StateMachine');
 var StateMachineFactory = require('./StateMachineFactory');
 var NOOP = function() {};
-/*
 
 var animatedStateMachineFactory = new StateMachineFactory({
     startState: 'start',
@@ -61,7 +60,6 @@ animatedStateMachine.transition('animating');
 setTimeout(function() {
     animatedStateMachine.exit();
 }, 340)
-*/
 
 // http://www.eventhelix.com/realtimemantra/images/Hierarchical_state_transition_diagram.gif
 
