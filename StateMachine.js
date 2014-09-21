@@ -32,6 +32,8 @@ function StateMachine(props, behavior, parent) {
 
 StateMachine.prototype = {
 
+    currentStateName: null,
+
     get enters() {
         if (!this._enters) { this._enters = new Channel; }
         return this._enters;
