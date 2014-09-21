@@ -59,6 +59,19 @@ StateMachine.prototype = {
         return tryToCall(tryToGet(parent, 'getEvent'), parent, name);
     },
 
+    /**
+     * Tries to get the named event stream and optionally onNext data into it.
+     *
+     * @param {String} name  The name of the event stream to get.
+     * @param {?} [data]  Optional data to pass into the event.
+     * @return {Boolean}  Whether the event was fired.
+     */
+    fireEvent: function(name, data) {
+        var event = this.getEvent(name);
+        event && event.onNext(data);
+        return !!event;
+    },
+
     getEvent: function(name) {
         return this._events[name] || this.getParentEvent(name);
     },
@@ -77,11 +90,11 @@ StateMachine.prototype = {
     },
 
     _listenForEventTransitions: function() {
-        var transitionOnEvents = tryToGet(this, '_props', 'transitionOnEvents');
-        for (var event in transitionOnEvents) {
+        var transitionsByEvent = tryToGet(this, '_props', 'transitionsByEvent');
+        for (var event in transitionsByEvent) {
             this.getEvent(event)
                 .takeUntil(this.exits)
-                .subscribe(this.transition.bind(this, transitionOnEvents[event]));
+                .subscribe(this.transition.bind(this, transitionsByEvent[event]));
         }
     },
 

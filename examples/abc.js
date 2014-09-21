@@ -7,7 +7,7 @@ function justPrint(value) {
 var abc = new StateMachine({
     events: ['1','2','3'],
     startStateName: 'a',
-    transitionOnEvents: {
+    transitionsByEvent: {
         '1': 'a',
         '2': 'b',
         '3': 'c'

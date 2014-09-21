@@ -157,6 +157,19 @@ State.prototype = {
     },
 
     /**
+     * Tries to get the named event stream and optionally onNext data into it.
+     *
+     * @param {String} name  The name of the event stream to get.
+     * @param {?} [data]  Optional data to pass into the event.
+     * @return {Boolean}  Whether the event was fired.
+     */
+    fireEvent: function(name, data) {
+        var event = this.getEvent(name);
+        event && event.onNext(data);
+        return !!event;
+    },
+
+    /**
      * Asks its parent StateMachine for a named event stream.
      *
      * @param {String} name
