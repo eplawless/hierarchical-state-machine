@@ -11,19 +11,19 @@ describe('StateMachine', function() {
 
     describe('#constructor', function() {
 
-        it('requires a props object with a collection of states and a startStateName', function() {
+        it('requires a props object with a collection of states and a start property', function() {
             expect(function() { new StateMachine; }).toThrow()
             expect(function() { new StateMachine({}); }).toThrow()
             expect(function() { new StateMachine({ states: {} }) }).toThrow()
-            expect(function() { new StateMachine({ startStateName: 'foo', states: {} }) }).toThrow()
-            expect(function() { new StateMachine({ startStateName: 'foo', states: { foo: {} } }) }).toNotThrow()
+            expect(function() { new StateMachine({ start: 'foo', states: {} }) }).toThrow()
+            expect(function() { new StateMachine({ start: 'foo', states: { foo: {} } }) }).toNotThrow()
         })
 
         it('accepts a props object and an optional behaviors object to extend it', function() {
             var calls = "";
             var sm = new StateMachine({
                 onEnter: function() { calls += "2" },
-                startStateName: "a",
+                start: "a",
                 states: {
                     a: {
                         onEnter: function() { calls += "5" }
@@ -53,7 +53,7 @@ describe('StateMachine', function() {
 
         it('enters the state machine\'s start state', function() {
             var sm = new StateMachine({
-                startStateName: 'a',
+                start: 'a',
                 states: { a: {} }
             });
             expect(sm.currentStateName).toBe(null)
@@ -64,7 +64,7 @@ describe('StateMachine', function() {
         it('calls the state machine\'s onEnter method', function() {
             var onEnterSpy = sinon.spy();
             var sm = new StateMachine({
-                startStateName: 'a',
+                start: 'a',
                 onEnter: onEnterSpy,
                 states: { a: {} }
             });
@@ -75,7 +75,7 @@ describe('StateMachine', function() {
         it('calls the start state\'s onEnter method after the state machine\'s onEnter', function() {
             var calls = "";
             var sm = new StateMachine({
-                startStateName: 'a',
+                start: 'a',
                 onEnter: function() { calls += "1" },
                 states: {
                     a: {
@@ -90,7 +90,7 @@ describe('StateMachine', function() {
         it('does nothing if the state machine is already entered', function() {
             var onEnterSpy = sinon.spy();
             var sm = new StateMachine({
-                startStateName: 'a',
+                start: 'a',
                 onEnter: onEnterSpy,
                 states: { a: {} }
             });
@@ -101,7 +101,7 @@ describe('StateMachine', function() {
 
         it('fires an "enters" observable', function() {
             var sm = new StateMachine({
-                startStateName: 'a',
+                start: 'a',
                 states: { a: {} }
             });
             var enterSpy = sinon.spy();
@@ -120,7 +120,7 @@ describe('StateMachine', function() {
 
         it('exits the state machine\'s current state', function() {
             var sm = new StateMachine({
-                startStateName: 'a',
+                start: 'a',
                 states: {
                     a: {}
                 }
@@ -135,7 +135,7 @@ describe('StateMachine', function() {
         it('calls the state machine\'s onExit method', function() {
             var onExitSpy = sinon.spy();
             var sm = new StateMachine({
-                startStateName: 'a',
+                start: 'a',
                 onExit: onExitSpy,
                 states: {
                     a: {}
@@ -149,7 +149,7 @@ describe('StateMachine', function() {
         it('calls the current state\'s onExit method before the state machine\'s', function() {
             var calls = "";
             var sm = new StateMachine({
-                startStateName: 'a',
+                start: 'a',
                 onExit: function() { calls += "2" },
                 states: {
                     a: {
@@ -164,7 +164,7 @@ describe('StateMachine', function() {
 
         it('does nothing if the state machine is not entered', function() {
             var sm = new StateMachine({
-                startStateName: 'a',
+                start: 'a',
                 onExit: function() { throw new Error("called onExit") },
                 states: {
                     a: {
@@ -179,7 +179,7 @@ describe('StateMachine', function() {
 
         it('fires an "exits" observable', function() {
             var sm = new StateMachine({
-                startStateName: 'a',
+                start: 'a',
                 states: { a: {} }
             });
             var exitSpy = sinon.spy();

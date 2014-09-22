@@ -77,12 +77,7 @@ State.prototype = {
         beforeEnter && beforeEnter(this, data);
         onEnter && onEnter(this, data);
         afterEnter && afterEnter(this, data);
-        this._listenForEventTransitions();
         return true;
-    },
-
-    _listenForEventTransitions: function() {
-        // TODO: implement
     },
 
     /**

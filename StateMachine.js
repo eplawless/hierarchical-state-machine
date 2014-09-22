@@ -2,45 +2,102 @@ var tryToGet = require('./tryToGet');
 var tryToCall = require('./tryToCall');
 var Event = require('./Event');
 var State = require('./State');
+var UNIT = Object.freeze({});
 
+/**
+ * A hierarchical state machine (or state chart).
+ *
+ * @param {Object}         props                  The core functionality of this state machine.
+ * @param {String}         props.start            The name of this state machine's initial state.
+ * @param {Array|Object}   props.states           A list (or map) of state names (or configurations).
+ * @param {Array}          [props.events]         A list of the names of event streams to create.
+ * @param {Array}          [props.transitions]    A list of transition description objects;
+ * @param {String}         [props.transitions[0].event]  The name of the event which triggers this transition.
+ * @param {String}         [props.transitions[0].from]   The name of the state we're transitioning from.
+ * @param {String}         [props.transitions[0].to]     The name of the state we're transitioning to.
+ * @param {Boolean}        [props.allowSelfTransitions=false]  Whether to allow self-transitions.
+ *
+ * @param {Function}       [props.canEnter]       If canEnter returns falsy we cancel an attempt to enter.
+ * @param {Function}       [props.canExit]        If canExit returns falsy we cancel an attempt to exit.
+ * @param {Function}       [props.onEnter]        Called when this state machine is entered.
+ * @param {Function}       [props.onExit]         Called when this state machine is exited.
+ *
+ * @param {Object}         [behavior]             Provides additional hooks and functionality.
+ *
+ * @param {StateMachine}   [parent]             This state machine's parent state machine.
+ */
 function StateMachine(props, behavior, parent) {
-    this.exit = this.exit.bind(this);
-    this.enter = this.enter.bind(this);
-    this.transition = this.transition.bind(this);
-    this._props = (props && typeof props === 'object') ? props : {};
-    var states = this._props.states;
-    if (Array.isArray(states)) {
-        this._props.states = {};
-        for (var idx = 0; idx < states.length; ++idx) {
-            this._props.states[states[idx]] = {};
-        }
-    } else {
-        this._props.states = this._props.states || {};
+
+    if (!props || typeof props !== 'object') {
+        throw new Error('StateMachine constructor requires properties object');
     }
-    if (!('startStateName' in this._props)) {
-        throw new Error('StateMachine requires startStateName property');
-    }
-    if (!(this._props.startStateName in this._props.states)) {
-        throw new Error('StateMachine\'s initial state "' + this._props.startStateName + '" doesn\'t exist');
-    }
+
+    behavior = (behavior && typeof behavior === 'object') ? behavior : UNIT;
+
+    this._props = props;
+    this._behavior = behavior;
     this.parent = parent;
-    ('allowSelfTransitions' in this._props) || (this._props.allowSelfTransitions = false);
-    ('requireExplicitTransitions' in this._props) || (this._props.requireExplicitTransitions = false);
-    ('states' in this._props) || (this._props.states = {});
-    this._behavior = behavior || {};
-    this._entered = false;
-    this.currentStateName = null;
-    this._nestedStateMachineFactories = this._createNestedStateMachineFactories(this._props.states);
+
     this._nestedStates = {};
-    this._events = this._createEvents(this._props);
-    this._isTransitioning = false;
     this._queuedEnters = [];
-    this._hasQueuedExit = false;
+
+    this._props.states = this._createStatesObject(this._props.states);
+    this._props.allowSelfTransitions = !!this._props.allowSelfTransitions;
+
+    if (typeof this._props.start !== 'string')
+        throw new Error('StateMachine requires properties.start to be a string');
+    if (!this._props.states[this._props.start])
+        throw new Error('StateMachine\'s initial state "' + this._props.start + '" doesn\'t exist');
+
+    this._nestedStateMachineFactories = this._createNestedStateMachineFactories(this._props.states);
+    this._events = this._createEvents(this._props);
+
 }
 
 StateMachine.prototype = {
 
+    __proto__: StateMachine.prototype, // for .constructor support
+
+    _props: null,
+    _behavior: null,
+    _entered: false,
+    _hasQueuedExit: false,
+    _queuedExitData: undefined,
+    _queuedEnters: null,
+    _isTransitioning: false,
+
     currentStateName: null,
+
+    _createStatesObject: function(states) {
+        if (!states || typeof states !== 'object') {
+            throw new Error('StateMachine requires properties.states object');
+        }
+        if (!Array.isArray(states)) {
+            return states;
+        }
+
+        var result = {};
+        for (var idx = 0; idx < states.length; ++idx) {
+            var state = states[idx];
+            if (state && typeof state.name === 'string') {
+                result[state.name] = state;
+            } else {
+                result[state] = {};
+            }
+        }
+        return result;
+    },
+
+    _createEvents: function(props) {
+        var result = {};
+        var listOfEvents = props.events || [];
+        if (Array.isArray(listOfEvents)) {
+            listOfEvents.forEach(function(name) {
+                result[name] = new Event;
+            })
+        }
+        return result;
+    },
 
     get enters() {
         if (!this._enters) { this._enters = new Event; }
@@ -55,17 +112,6 @@ StateMachine.prototype = {
     get transitions() {
         if (!this._transitions) { this._transitions = new Event; }
         return this._transitions;
-    },
-
-    _createEvents: function(props) {
-        var result = {};
-        var listOfEvents = props.events || [];
-        if (Array.isArray(listOfEvents)) {
-            listOfEvents.forEach(function(name) {
-                result[name] = new Event;
-            })
-        }
-        return result;
     },
 
     getParentEvent: function(name) {
@@ -169,22 +215,22 @@ StateMachine.prototype = {
         }
     },
 
-    enter: function() {
+    enter: function(data) {
         if (this._entered) {
             return;
         }
         this._entered = true; // we set this flag here so we can transition more on the way in
-        this._enters && this._enters.onNext();
+        this._enters && this._enters.onNext(data);
         this._isTransitioning = true;
-        tryToCall(tryToGet(this, '_behavior', 'beforeEnter'), this, this, this.parent);
-        tryToCall(tryToGet(this, '_props', 'onEnter'), this, this, this.parent);
-        tryToCall(tryToGet(this, '_behavior', 'afterEnter'), this, this, this.parent);
+        tryToCall(tryToGet(this, '_behavior', 'beforeEnter'), this, this, data);
+        tryToCall(tryToGet(this, '_props', 'onEnter'), this, this, data);
+        tryToCall(tryToGet(this, '_behavior', 'afterEnter'), this, this, data);
         this._isTransitioning = false;
         this._listenForEventTransitions();
         if (this._queuedEnters.length) { // allow before/on/afterEnter to transition us first
             this.transition();
         } else {
-            this.transition(this._props.startStateName);
+            this.transition(this._props.start, data);
         }
     },
 
@@ -201,18 +247,19 @@ StateMachine.prototype = {
         return nestedState;
     },
 
-    _enterNestedState: function(stateName, stateProps, stateBehavior) {
+    _enterNestedState: function(stateName, stateProps, stateBehavior, data) {
         this.currentStateName = stateName;
         var nestedState = this._getOrCreateNestedState(stateName, stateProps, stateBehavior);
-        nestedState.enter();
+        nestedState.enter(data);
     },
 
-    exit: function() {
+    exit: function(data) {
         if (!this._entered) {
             return;
         }
         if (this._isTransitioning) {
             this._hasQueuedExit = true;
+            this._queuedExitData = data;
             return;
         }
         this._entered = false; // we set this flag here so we can't transition on the way out
@@ -220,18 +267,19 @@ StateMachine.prototype = {
         this._exitNestedState(
             this.currentStateName,
             tryToGet(this, '_props', 'states', this.currentStateName),
-            tryToGet(this, '_behavior', 'states', this.currentStateName)
+            tryToGet(this, '_behavior', 'states', this.currentStateName),
+            data
         );
-        tryToCall(tryToGet(this, '_behavior', 'beforeExit'), this, this, this.parent);
-        tryToCall(tryToGet(this, '_props', 'onExit'), this, this, this.parent);
-        tryToCall(tryToGet(this, '_behavior', 'afterExit'), this, this, this.parent);
-        this._exits && this._exits.onNext();
+        tryToCall(tryToGet(this, '_behavior', 'beforeExit'), this, this, data);
+        tryToCall(tryToGet(this, '_props', 'onExit'), this, this, data);
+        tryToCall(tryToGet(this, '_behavior', 'afterExit'), this, this, data);
+        this._exits && this._exits.onNext(data);
     },
 
-    _exitNestedState: function(stateName, stateProps, stateBehavior) {
+    _exitNestedState: function(stateName, stateProps, stateBehavior, data) {
         var nestedState = this._nestedStates[stateName];
         if (nestedState) {
-            nestedState.exit();
+            nestedState.exit(data);
             delete this._nestedStates[stateName];
         }
         this.currentStateName = null;
@@ -254,21 +302,8 @@ StateMachine.prototype = {
         if (!nextState) { return false; }
         var isSelfTransition = lastStateName === nextStateName;
         var allowSelfTransitions = !!this._props.allowSelfTransitions;
-        var requireExplicitTransitions = !!this._props.requireExplicitTransitions;
 
-        var allowTransitionsTo = tryToGet(this._props, 'states', lastStateName, 'allowTransitionsTo');
-        var allowTransitionsFromLastToNext = false;
-        if (Array.isArray(allowTransitionsTo)) {
-            allowTransitionsFromLastToNext = allowTransitionsTo.indexOf(nextStateName) > -1;
-        } else {
-            allowTransitionsFromLastToNext = !!tryToGet(allowTransitionsTo, nextStateName);
-        }
-
-        if (isSelfTransition && !allowSelfTransitions && !allowTransitionsFromLastToNext) {
-            return false;
-        }
-
-        if (requireExplicitTransitions && lastState && !allowTransitionsFromLastToNext) {
+        if (isSelfTransition && !allowSelfTransitions) {
             return false;
         }
 
@@ -287,25 +322,27 @@ StateMachine.prototype = {
         return true;
     },
 
-    transition: function(stateName) {
+    transition: function(stateName, data) {
         if (!this._entered) {
             return;
         }
         var props = this._props;
         var behavior = this._behavior;
         if (this._isTransitioning && stateName) {
-            this._queuedEnters.push(stateName);
+            this._queuedEnters.push({ name: stateName, data: data });
             return;
         }
 
         this._isTransitioning = true;
 
         if (stateName) {
-            this._queuedEnters.push(stateName);
+            this._queuedEnters.push({ name: stateName, data: data });
         }
         while (this._queuedEnters.length) {
             var lastStateName = this.currentStateName;
-            var nextStateName = this._queuedEnters.shift();
+            var queuedEnter = this._queuedEnters.shift();
+            var nextStateName = queuedEnter.name;
+            var data = queuedEnter.data;
             var lastState = props.states[lastStateName];
             var nextState = props.states[nextStateName];
             if (!this._isTransitionAllowed(lastStateName, nextStateName, lastState, nextState)) {
@@ -315,25 +352,29 @@ StateMachine.prototype = {
             var lastNestedState = this._exitNestedState(
                 lastStateName,
                 lastState,
-                tryToGet(behavior, 'states', lastStateName)
+                tryToGet(behavior, 'states', lastStateName),
+                data
             );
 
             var nextStateBehavior = tryToGet(behavior, 'states', nextStateName);
             var nextNestedState = this._getOrCreateNestedState(nextStateName, nextState, nextStateBehavior);
 
-            this._runTransitionHandlers(lastStateName, nextStateName, lastNestedState, nextNestedState);
+            this._runTransitionHandlers(lastStateName, nextStateName, lastNestedState, nextNestedState, data);
 
             this._enterNestedState(
                 nextStateName,
                 nextState,
-                nextStateBehavior
+                nextStateBehavior,
+                data
             );
         }
 
         this._isTransitioning = false;
         if (this._hasQueuedExit) {
+            var data = this._queuedExitData;
             this._hasQueuedExit = false;
-            this.exit();
+            this._queuedExitData = undefined;
+            this.exit(data);
         }
     }
 };
