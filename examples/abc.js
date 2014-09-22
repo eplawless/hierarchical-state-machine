@@ -1,26 +1,28 @@
 var StateMachine = require('../StateMachine');
 
-function justPrint(value) {
-    return function print() { console.log(value); }
-}
+function output(value) { return function() { console.log(value); } }
 
 var abc = new StateMachine({
-    events: ['1','2','3'],
-    startStateName: 'a',
-    transitionsByEvent: {
-        '1': 'a',
-        '2': 'b',
-        '3': 'c'
-    },
-    states: {
-        a: { onEnter: justPrint('a') },
-        b: { onEnter: justPrint('b') },
-        c: { onEnter: justPrint('c') }
-    }
+    start: 'a',
+    states: ['a','b','c'],
+    events: ['next'],
+    transitions: [
+        { event: 'next', from: 'a', to: 'b' },
+        { event: 'next', from: 'b', to: 'c' },
+        { event: 'next', from: 'c', to: 'a' },
+    ],
 });
 
+abc.setBehavior({
+    states: {
+        a: { afterEnter: output('a') },
+        b: { afterEnter: output('b') },
+        c: { afterEnter: output('c') },
+    }
+})
+
 abc.enter();
-abc.getEvent('3').onNext()
-abc.getEvent('1').onNext()
-abc.getEvent('2').onNext()
+abc.fireEvent('next');
+abc.fireEvent('next');
+abc.fireEvent('next');
 abc.exit();
