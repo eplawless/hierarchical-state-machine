@@ -51,7 +51,8 @@ function StateMachine(props, behavior, parent) {
         throw new Error('StateMachine\'s initial state "' + this._props.start + '" doesn\'t exist');
 
     this._nestedStateMachineFactories = this._createNestedStateMachineFactories(this._props.states);
-    this._events = this._createEvents(this._props);
+    this._events = this._createEvents(this._props.events);
+    this._privateEvents = this._createEvents(this._props.privateEvents);
 
 }
 
@@ -61,12 +62,15 @@ StateMachine.prototype = {
 
     _props: null,
     _behavior: null,
+    _events: null,
+    _privateEvents: null,
     _entered: false,
     _hasQueuedExit: false,
     _queuedExitData: undefined,
     _queuedTransitions: null,
     _isTransitioning: false,
     _enterObservablesByState: null,
+    _canAccessPrivateEvents: false,
 
     currentStateName: null,
 
@@ -100,9 +104,8 @@ StateMachine.prototype = {
         }
     },
 
-    _createEvents: function(props) {
+    _createEvents: function(listOfEvents) {
         var result = {};
-        var listOfEvents = props.events;
         if (Array.isArray(listOfEvents)) {
             for (var idx = 0; idx < listOfEvents.length; ++idx) {
                 result[listOfEvents[idx]] = new Event;
@@ -129,7 +132,7 @@ StateMachine.prototype = {
     getParentEvent: function(name) {
         var parent = this.parent;
         var getEvent = parent && parent.getEvent;
-        return getEvent && parent.getEvent(name);
+        return getEvent && parent.getEvent(name, true);
     },
 
     /**
@@ -145,8 +148,11 @@ StateMachine.prototype = {
         return !!event;
     },
 
-    getEvent: function(name) {
-        return this._events[name] || this.getParentEvent(name);
+    getEvent: function(name, canAccessPrivateEvents) {
+        canAccessPrivateEvents = canAccessPrivateEvents || this._canAccessPrivateEvents;
+        return this._events[name] ||
+            (canAccessPrivateEvents && this._privateEvents[name]) ||
+            this.getParentEvent(name);
     },
 
     _createNestedStateMachineFactories: function(states) {
@@ -217,8 +223,11 @@ StateMachine.prototype = {
             eventStream = eventStream
                 .takeUntil(this.exits)
                 .doAction(function invokeHandler(handler, data) {
+                    var couldAccessPrivateEvents = this._canAccessPrivateEvents;
+                    this._canAccessPrivateEvents = true;
                     var state = this._activeStates[this.currentStateName]
-                    return handler(state, data)
+                    handler(state, data)
+                    this._canAccessPrivateEvents = couldAccessPrivateEvents;
                 }.bind(this, handler));
 
             if (state) {
@@ -272,6 +281,9 @@ StateMachine.prototype = {
         if (this._entered) {
             return;
         }
+        var couldAccessPrivateEvents = this._canAccessPrivateEvents;
+
+        this._canAccessPrivateEvents = true;
         this._entered = true; // we set this flag here so we can transition more on the way in
         this._enters && this._enters.onNext(data);
         this._isTransitioning = true;
@@ -301,6 +313,8 @@ StateMachine.prototype = {
         } else {
             this.transition(this._props.start, data);
         }
+
+        this._canAccessPrivateEvents = couldAccessPrivateEvents;
     },
 
     _getOrCreateNestedState: function(stateName, stateProps, stateBehavior) {
@@ -340,6 +354,10 @@ StateMachine.prototype = {
             this._queuedExitData = data;
             return;
         }
+
+        var couldAccessPrivateEvents = this._canAccessPrivateEvents;
+        this._canAccessPrivateEvents = true;
+
         this._entered = false; // we set this flag here so we can't transition on the way out
         this._transitions && this._transitions.onNext({ from: this.currentStateName, to: null });
         this._exitNestedState(
@@ -357,6 +375,8 @@ StateMachine.prototype = {
         onExit && onExit.call(this, this, data);
         afterExit && afterExit.call(this, this, data);
         this._exits && this._exits.onNext(data);
+
+        this._canAccessPrivateEvents = couldAccessPrivateEvents;
     },
 
     _exitNestedState: function(stateName, stateProps, stateBehavior, data) {
@@ -400,6 +420,9 @@ StateMachine.prototype = {
             this._queuedTransitions.push({ name: stateName, data: data });
             return;
         }
+
+        var couldAccessPrivateEvents = this._canAccessPrivateEvents;
+        this._canAccessPrivateEvents = true;
 
         this._isTransitioning = true;
 
@@ -445,6 +468,8 @@ StateMachine.prototype = {
         }
 
         this._isTransitioning = false;
+        this._canAccessPrivateEvents = couldAccessPrivateEvents;
+
         if (this._hasQueuedExit) {
             var data = this._queuedExitData;
             this._hasQueuedExit = false;

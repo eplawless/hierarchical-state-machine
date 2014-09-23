@@ -174,7 +174,7 @@ State.prototype = {
     getParentEvent: function(name, scope) {
         var parent = this.parent;
         var getEvent = parent && parent.getEvent;
-        return getEvent && parent.getEvent(name);
+        return getEvent && parent.getEvent(name, true);
     },
 
     /**
