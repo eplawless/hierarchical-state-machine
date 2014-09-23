@@ -1,5 +1,7 @@
 var StateMachine = require('../StateMachine');
+var Rx = require('rx');
 
+function printData(_, data) { console.log(data); }
 function output(value) { return function() { console.log(value); } }
 
 var abc = new StateMachine({
@@ -15,14 +17,22 @@ var abc = new StateMachine({
 
 abc.setBehavior({
     states: {
-        a: { afterEnter: output('a') },
-        b: { afterEnter: output('b') },
-        c: { afterEnter: output('c') },
+        a: {
+            afterEnter: output('-> a'),
+            beforeExit: output('<- a')
+        },
+        b: {
+            afterEnter: output('-> b'),
+            beforeExit: output('<- b')
+        },
+        c: {
+            afterEnter: output('-> c'),
+            beforeExit: output('<- c')
+        },
     }
-})
+});
 
 abc.enter();
-abc.fireEvent('next');
-abc.fireEvent('next');
-abc.fireEvent('next');
-abc.exit();
+
+Rx.Observable.interval(1000)
+    .subscribe(abc.getEvent('next'));

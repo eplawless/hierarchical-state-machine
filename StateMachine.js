@@ -207,20 +207,36 @@ StateMachine.prototype = {
             var transition = transitions[idxTransition];
             var from = transition.from;
             var to = transition.to;
+            var handler = transition.handler;
 
-            var event = transition.event;
-            var eventStream = this.getEvent(event)
-                .takeUntil(this.exits)
-                .doAction(this.transition.bind(this, to));
-
-            if (!eventStream)
-                throw this._getInvalidEventError(transition, event);
             if (from && !this._props.states[from])
                 throw this._getInvalidStateError(transition, from, 'from');
-            if (!to)
+            // TODO: handler error
+            if (to && handler) // freak out
+                throw "dafuk";
+            if (!to && !handler)
                 throw this._getMissingToStateError(transition);
             if (to && !this._props.states[to])
                 throw this._getInvalidStateError(transition, to, 'to');
+
+            var event = transition.event;
+            var eventStream = this.getEvent(event);
+            if (!eventStream)
+                throw this._getInvalidEventError(transition, event);
+
+            var action;
+            if (handler) {
+                action = function invokeHandler(handler, data) {
+                    var state = this._activeStates[this.currentStateName];
+                    return handler(state, data);
+                }.bind(this, handler);
+            } else {
+                action = this.transition.bind(this, to);
+            }
+
+            eventStream = eventStream
+                .takeUntil(this.exits)
+                .doAction(action);
 
             if (from) {
                 transitionObservablesByState[from] = transitionObservablesByState[from] || [];
@@ -360,7 +376,9 @@ StateMachine.prototype = {
         if (stateName) {
             this._queuedTransitions.push({ name: stateName, data: data });
         }
+
         while (this._queuedTransitions.length) {
+
             var lastStateName = this.currentStateName;
             var queuedEnter = this._queuedTransitions.shift();
             var nextStateName = queuedEnter.name;
