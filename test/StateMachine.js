@@ -192,4 +192,192 @@ describe('StateMachine', function() {
 
     })
 
+    describe('event handler and transition ordering', function() {
+
+        it('fires global event handlers in the order they appear', function() {
+            var calls = "";
+            var fsm = new StateMachine({
+                start: 'state',
+                states: ['state'],
+                events: ['event'],
+                eventHandlers: [
+                    { event: 'event', handler: function() { calls += "1"; } },
+                    { event: 'event', handler: function() { calls += "2"; } },
+                    { event: 'event', handler: function() { calls += "3"; } },
+                    { event: 'event', handler: function() { calls += "4"; } },
+                    { event: 'event', handler: function() { calls += "5"; } }
+                ]
+            });
+
+            fsm.enter();
+            fsm.fireEvent('event');
+            expect(calls).toBe("12345");
+        });
+
+        it('fires state event handlers before global event handlers, in the order they appear', function() {
+            var calls = "";
+            var fsm = new StateMachine({
+                start: 'state',
+                states: ['state'],
+                events: ['event'],
+                eventHandlers: [
+                    { event: 'event', handler: function() { calls += "4"; } },
+                    { event: 'event', state: 'state', handler: function() { calls += "1"; } },
+                    { event: 'event', handler: function() { calls += "5"; } },
+                    { event: 'event', state: 'state', handler: function() { calls += "2"; } },
+                    { event: 'event', handler: function() { calls += "6"; } },
+                    { event: 'event', state: 'state', handler: function() { calls += "3"; } },
+                ]
+            });
+
+            fsm.enter();
+            fsm.fireEvent('event');
+            expect(calls).toBe("123456");
+        })
+
+        it('fires top-level event handlers before nested event handlers', function() {
+            var calls = "";
+            function call(number) { return function() { calls += number; } }
+            var fsm = new StateMachine({
+                start: 'state',
+                events: ['event'],
+                eventHandlers: [
+                    { event: 'event', handler: call("3") },
+                    { event: 'event', state: 'state', handler: call("1") },
+                    { event: 'event', handler: call("4") },
+                    { event: 'event', state: 'state', handler: call("2") },
+                ],
+                states: {
+                    state: {
+                        start: 'substate',
+                        states: ['substate'],
+                        eventHandlers: [
+                            { event: 'event', handler: call("7") },
+                            { event: 'event', state: 'substate', handler: call("5") },
+                            { event: 'event', handler: call("8") },
+                            { event: 'event', state: 'substate', handler: call("6") },
+                        ]
+                    }
+                },
+            });
+
+            fsm.enter();
+            fsm.fireEvent('event');
+            expect(calls).toBe("12345678");
+        })
+
+        it('doesn\'t keep transitioning if its new state can respond to the transition event', function() {
+            var spy = sinon.spy();
+            var fsm = new StateMachine({
+                start: 'a',
+                states: {
+                    a: { onEnter: spy },
+                    b: { onEnter: spy },
+                    c: { onEnter: spy },
+                },
+                events: ['event'],
+                transitions: [
+                    { event: 'event', from: 'a', to: 'b' },
+                    { event: 'event', from: 'b', to: 'c' },
+                    { event: 'event', from: 'c', to: 'a' },
+                ]
+            })
+
+            fsm.enter();
+            expect(spy.calledOnce).toBe(true);
+            fsm.fireEvent('event');
+            expect(spy.calledTwice).toBe(true);
+            fsm.fireEvent('event');
+            expect(spy.calledThrice).toBe(true);
+        })
+
+        it('fires state-specific transitions before global transitions', function() {
+            var spy = sinon.spy();
+            var fsm = new StateMachine({
+                start: 'a',
+                states: ['a', { name: 'b', onEnter: spy }, { name: 'c', onEnter: spy }],
+                events: ['event'],
+                transitions: [
+                    { event: 'event', to: 'c' },
+                    { event: 'event', from: 'a', to: 'b' },
+                ]
+            })
+
+            fsm.enter();
+            expect(fsm.currentStateName).toBe('a');
+            expect(spy.called).toBe(false);
+            fsm.fireEvent('event');
+            expect(fsm.currentStateName).toBe('b');
+            expect(spy.calledOnce).toBe(true);
+        })
+
+        it('checks global transitions in the order they appear and fires the first that matches', function() {
+            var spy = sinon.spy();
+            var fsm = new StateMachine({
+                start: 'a',
+                states: ['a', { name: 'b', onEnter: spy }, { name: 'c', onEnter: spy }],
+                events: ['event'],
+                transitions: [
+                    { event: 'event', to: 'c' },
+                    { event: 'event', to: 'b' },
+                ]
+            })
+
+            fsm.enter();
+            expect(fsm.currentStateName).toBe('a');
+            expect(spy.called).toBe(false);
+            fsm.fireEvent('event');
+            expect(fsm.currentStateName).toBe('c');
+            expect(spy.calledOnce).toBe(true);
+        })
+
+        it('checks state-specific transitions in order and fires the first that matches', function() {
+            var spy = sinon.spy();
+            var fsm = new StateMachine({
+                start: 'a',
+                states: {
+                    a: {},
+                    b: { onEnter: spy },
+                    c: { onEnter: spy },
+                    d: { onEnter: spy },
+                },
+                events: ['event'],
+                transitions: [
+                    { event: 'event', to: 'd' },
+                    { event: 'event', from: 'a', to: 'b' },
+                    { event: 'event', from: 'a', to: 'c' },
+                ]
+            })
+
+            fsm.enter();
+            expect(fsm.currentStateName).toBe('a');
+            expect(spy.called).toBe(false);
+            fsm.fireEvent('event');
+            expect(fsm.currentStateName).toBe('b');
+            expect(spy.calledOnce).toBe(true);
+        })
+
+        it('fires event handlers before transitions', function() {
+            var calls = "";
+            function call(number) { return function() { calls += number; } }
+            var fsm = new StateMachine({
+                start: 'a',
+                states: ['a', { name: 'b', onEnter: call("3") }],
+                events: ['event'],
+                eventHandlers: [
+                    { event: 'event', handler: call("2") },
+                    { event: 'event', state: 'a', handler: call("1") }
+                ],
+                transitions: [
+                    { event: 'event', from: 'a', to: 'b' }
+                ]
+            })
+
+            fsm.enter();
+            fsm.fireEvent('event');
+            expect(calls).toBe("123");
+        })
+
+    })
+
 })

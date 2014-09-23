@@ -12,26 +12,29 @@ function interval(state, duration) {
 var playerUi = new StateMachine({
     start: 'idle',
     events: ['play', 'stop'],
-    privateEvents: ['playbackStarted', 'playbackStopped', 'stopLoading'],
+    privateEvents: ['playbackStarted', 'playbackStopped'],
     transitions: [
-        { event: 'stop', to: 'stopping' },
         { event: 'play', from: 'idle', to: 'loading' },
-        { event: 'stopLoading', from: 'loading', to: 'idle' },
+        { event: 'stop', from: 'loading', to: 'idle' },
+        { event: 'stop', from: 'playing', to: 'stopping' },
         { event: 'playbackStarted', from: 'loading', to: 'playing' },
         { event: 'playbackStopped', from: 'stopping', to: 'idle' }
     ],
     eventHandlers: [
+        { event: 'play', handler: function logPlayEvent(state, video) {
+            console.log('got play event for video', video.id);
+        } },
         { state: 'playing', event: 'play', handler: function stopThenPlayAgain(playingState, nextVideo) {
-            var currentVideo = playingState.getProperty('currentVideo');
-            console.log('got play event for ' + nextVideo.id + ', stopping ' + currentVideo.id);
-            playingState.fireEvent('stop', { storeBookmark: true, stopping: currentVideo, next: nextVideo });
+            playingState.fireEvent('stop', {
+                storeBookmark: true,
+                stopping: playingState.getProperty('currentVideo'),
+                next: nextVideo
+            });
         } },
         { state: 'loading', event: 'play', handler: function startPlay(loadingState, video) {
-            console.log('got play event for ' + video.id + ', cancelling load');
-            loadingState.fireEvent('stopLoading', { next: video });
+            loadingState.fireEvent('stop', { next: video });
         } },
         { state: 'stopping', event: 'play', handler: function queuePlay(stoppingState, video) {
-            console.log('got play event for ' + video.id + ', deferring');
             stoppingState.setProperty('nextVideo', video); // don't transition yet but schedule us to be next
         } },
     ],
@@ -69,6 +72,7 @@ var playerUi = new StateMachine({
                         timer(downloadingState, 500)
                             .subscribe(function downloadComplete() {
                                 console.log('download complete');
+                                data.percentDone = 90;
                                 downloadingState.fireEvent('downloadComplete', data);
                             });
                     }
@@ -78,7 +82,7 @@ var playerUi = new StateMachine({
                         console.log('verifying video', data.id);
 
                         // verify video
-                        data.checkMark = true;
+                        data.verified = true;
                         verifyingState.fireEvent('dataVerified', data)
                     }
                 },
@@ -118,20 +122,20 @@ var playerUi = new StateMachine({
             }
         },
         stopping: {
-            onEnter: function(stoppingState, data) {
-                stoppingState.setProperty('nextVideo', data.next);
+            onEnter: function(stoppingState, stopEvent) {
+                stoppingState.setProperty('nextVideo', stopEvent.next);
 
-                var currentVideo = data.stopping;
+                var currentVideo = stopEvent.stopping;
                 console.log('stopping video', currentVideo.id);
 
                 // stop video
                 timer(stoppingState, 500)
                     .subscribe(function() {
-                        if (data.storeBookmark) {
+                        if (stopEvent.storeBookmark) {
                             console.log('storing bookmark for video ' + currentVideo.id);
                         }
                         stoppingState.fireEvent('playbackStopped', {
-                            error: data.error,
+                            error: stopEvent.error,
                             next: stoppingState.getProperty('nextVideo')
                         });
                     });
@@ -154,6 +158,7 @@ var playerUi = new StateMachine({
 //   exits each state then calls its handler if any, handler can re-enter which cancels the bubbling
 // [ ] TODO: detect when my child StateMachine exits and start exiting too
 // [ ] TODO: add handler instead of to for transitions
+// [ ] TODO: deal with transitions during event handlers
 
 // HARD THINGS NEXT:
 // [x] Play event while loading

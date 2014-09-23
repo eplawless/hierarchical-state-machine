@@ -11,12 +11,18 @@ function NOOP() {}
  * @param {Object}         props             The core functionality of this state machine.
  * @param {String}         props.start       The name of this state machine's initial state.
  * @param {Array|Object}   props.states      A list (or map) of state names (or configurations).
- * @param {Array}          [props.events]    A list of the names of event streams to create.
+ * @param {Array}          [props.events]    A list of the names of event streams to create and expose.
+ * @param {Array}          [props.privateEvents]    A list of the names of private event streams to create.
  *
- * @param {Array}          [props.transitions]            A list of transition description objects;
- * @param {String}         [props.transitions[0].event]   The name of the event which triggers this transition.
+ * @param {Array}          [props.transitions]            A list of transition description objects.
+ * @param {String}         props.transitions[0].event     The name of the event which triggers this transition.
+ * @param {String}         props.transitions[0].to        The name of the state we're transitioning to.
  * @param {String}         [props.transitions[0].from]    The name of the state we're transitioning from.
- * @param {String}         [props.transitions[0].to]      The name of the state we're transitioning to.
+ *
+ * @param {Array}          [props.eventHandlers]             A list of event handler description objects.
+ * @param {String}         [props.eventHandlers[0].state]    Only handle these events when in this state.
+ * @param {String}         [props.eventHandlers[0].event]    The name of the event to handle.
+ * @param {String}         [props.eventHandlers[0].handler]  The name of the handler to invoke.
  *
  * @param {Boolean}        [props.allowSelfTransitions=false]   Whether to allow self-transitions.
  *
@@ -69,7 +75,7 @@ StateMachine.prototype = {
     _queuedExitData: undefined,
     _queuedTransitions: null,
     _isTransitioning: false,
-    _enterObservablesByState: null,
+    _eventHandlerObservablesByState: null,
     _canAccessPrivateEvents: false,
 
     currentStateName: null,
@@ -195,12 +201,17 @@ StateMachine.prototype = {
             "  Valid events: " + this._getValidEventsForErrorMessage().join(', '));
     },
 
-    _getMissingPropertyError: function(type, transition, stateType) {
+    _getMissingPropertyError: function(type, transition, propertyName) {
         return new Error("StateMachine Error: " + type + " " + JSON.stringify(transition) + "\n" +
-            "  Missing " + (stateType ?"'"+stateType+"' " : "") + "property.");
+            "  Missing " + (propertyName ?"'"+propertyName+"' " : "") + "property.");
     },
 
-    _listenForEventHandlers: function(enterObservablesByState) {
+    _getInvalidPropertyError: function(type, transition, propertyName) {
+        return new Error("StateMachine Error: " + type + " " + JSON.stringify(transition) + "\n" +
+            "  Invalid " + (propertyName ?"'"+propertyName+"' " : "") + "property.");
+    },
+
+    _createEventHandlers: function(observablesByState, globalObservables) {
 
         var eventHandlers = this._props.eventHandlers;
 
@@ -212,7 +223,7 @@ StateMachine.prototype = {
             var handler = eventHandler.handler;
 
             if (state && !this._props.states[state])
-                throw this._getMissingPropertyError('Event Handler', transition, 'state');
+                throw this._getInvalidPropertyError('Event Handler', eventHandler, 'state');
             if (typeof handler !== 'function')
                 throw new Error("Expected handler function");
 
@@ -231,17 +242,17 @@ StateMachine.prototype = {
                 }.bind(this, handler));
 
             if (state) {
-                enterObservablesByState[state] = enterObservablesByState[state] || [];
-                enterObservablesByState[state].push(eventStream);
+                observablesByState[state] = observablesByState[state] || [];
+                observablesByState[state].push(eventStream);
             } else {
-                eventStream.subscribe(NOOP);
+                globalObservables.push(eventStream);
             }
 
         }
 
     },
 
-    _listenForEventTransitions: function(enterObservablesByState) {
+    _createEventTransitions: function(observablesByState, globalObservables) {
 
         var transitions = this._props.transitions;
 
@@ -268,10 +279,10 @@ StateMachine.prototype = {
                 .doAction(this.transition.bind(this, to));
 
             if (from) {
-                enterObservablesByState[from] = enterObservablesByState[from] || [];
-                enterObservablesByState[from].push(eventStream);
+                observablesByState[from] = observablesByState[from] || [];
+                observablesByState[from].push(eventStream);
             } else {
-                eventStream.subscribe(NOOP);
+                globalObservables.push(eventStream);
             }
 
         }
@@ -296,17 +307,31 @@ StateMachine.prototype = {
             beforeEnter && beforeEnter.call(this, this, data);
             onEnter && onEnter.call(this, this, data);
             afterEnter && afterEnter.call(this, this, data);
+
+            this._isTransitioning = false;
+
+            if (this._props.eventHandlers) {
+                var eventHandlerObservablesByState = {};
+                var globalEventHandlerObservables = [];
+                this._eventHandlerObservablesByState = eventHandlerObservablesByState;
+                this._globalEventHandlerObservables = globalEventHandlerObservables;
+                this._createEventHandlers(eventHandlerObservablesByState, globalEventHandlerObservables);
+            }
+
+            if (this._props.transitions) {
+                var transitionObservablesByState = {};
+                var globalTransitionObservables = [];
+                this._transitionObservablesByState = transitionObservablesByState;
+                this._globalTransitionObservables = globalTransitionObservables;
+                this._createEventTransitions(transitionObservablesByState, globalTransitionObservables);
+            }
+
         } catch (e) {
-            this._hasQueuedExit = true;
-            this._queuedExitData = e;
+            this._isTransitioning = false;
+            this.exit();
+            throw e;
         }
 
-        this._isTransitioning = false;
-
-        var enterObservablesByState = {};
-        this._enterObservablesByState = enterObservablesByState;
-        this._listenForEventTransitions(enterObservablesByState);
-        this._listenForEventHandlers(enterObservablesByState);
         // allow before/on/afterEnter to transition us first
         if (this._hasQueuedExit || this._queuedTransitions.length) {
             this.transition();
@@ -333,15 +358,46 @@ StateMachine.prototype = {
     _enterNestedState: function(stateName, stateProps, stateBehavior, data) {
         this.currentStateName = stateName;
         var nestedState = this._getOrCreateNestedState(stateName, stateProps, stateBehavior);
-        var enterObservablesByState = this._enterObservablesByState;
-        var listOfObservables = enterObservablesByState && enterObservablesByState[stateName];
-        if (Array.isArray(listOfObservables)) {
-            for (var idx = 0; idx < listOfObservables.length; ++idx) {
-                listOfObservables[idx]
+        var eventHandlersByState = this._eventHandlerObservablesByState;
+        var eventHandlers = eventHandlersByState && eventHandlersByState[stateName];
+        var globalEventHandlers = this._globalEventHandlerObservables;
+        var transitionsByState = this._transitionObservablesByState;
+        var transitions = transitionsByState && transitionsByState[stateName];
+        var globalTransitions = this._globalTransitionObservables;
+
+        // It's important that we listen for event handlers BEFORE event transitions, so that all
+        // the handlers have a chance to fire before any of the transitions do. Note that we give
+        // precedence to more specific event handlers (i.e. having a 'state' property means you
+        // get to fire first). Ditto transitions with 'from' properties.
+        if (Array.isArray(eventHandlers)) {
+            for (var idx = 0; idx < eventHandlers.length; ++idx) {
+                eventHandlers[idx]
                     .takeUntil(nestedState.exits)
-                    .subscribe(NOOP); // the observable will transition for us
+                    .subscribe(NOOP);
             }
         }
+        if (Array.isArray(globalEventHandlers)) {
+            for (var idx = 0; idx < globalEventHandlers.length; ++idx) {
+                globalEventHandlers[idx]
+                    .takeUntil(nestedState.exits)
+                    .subscribe(NOOP);
+            }
+        }
+        if (Array.isArray(transitions)) {
+            for (var idx = 0; idx < transitions.length; ++idx) {
+                transitions[idx]
+                    .takeUntil(nestedState.exits)
+                    .subscribe(NOOP);
+            }
+        }
+        if (Array.isArray(globalTransitions)) {
+            for (var idx = 0; idx < globalTransitions.length; ++idx) {
+                globalTransitions[idx]
+                    .takeUntil(nestedState.exits)
+                    .subscribe(NOOP);
+            }
+        }
+
         nestedState.enter(data);
     },
 
@@ -377,6 +433,9 @@ StateMachine.prototype = {
         this._exits && this._exits.onNext(data);
 
         this._canAccessPrivateEvents = couldAccessPrivateEvents;
+        this._hasQueuedExit = false;
+        delete this._queuedExitData;
+        this._queuedTransitions.length = 0;
     },
 
     _exitNestedState: function(stateName, stateProps, stateBehavior, data) {
@@ -463,8 +522,9 @@ StateMachine.prototype = {
                 );
             }
         } catch(e) {
-            this._hasQueuedExit = true;
-            this._queuedExitData = e;
+            this._isTransitioning = false;
+            this.exit();
+            throw e;
         }
 
         this._isTransitioning = false;
