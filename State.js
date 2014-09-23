@@ -24,6 +24,7 @@ function State(props, behavior, parent) {
     this._props = props || UNIT;
     this._behavior = behavior || UNIT;
     this._entered = false;
+    this._properties = null;
     this.parent = parent;
 }
 
@@ -175,6 +176,30 @@ State.prototype = {
         var getEvent = parent && parent.getEvent;
         return getEvent && parent.getEvent(name);
     },
+
+    /**
+     * Sets a mutable property on this State object.
+     *
+     * @param {String} name
+     * @param {?} value
+     */
+    setProperty: function(name, value) {
+        var properties = this._properties || {};
+        properties[name] = value;
+        this._properties = properties;
+    },
+
+    /**
+     * Gets a mutable property from this State object.
+     *
+     * @param {String} name
+     * @return {?} value
+     */
+    getProperty: function(name) {
+        if (this._properties) {
+            return this._properties[name];
+        }
+    }
 
 };
 

@@ -11,21 +11,24 @@ function interval(state, duration) {
 var playerUi = new StateMachine({
     start: 'idle',
     events: ['play', 'stop', '_playbackStarted', '_playbackStopped'],
-    transitions: [
-        { event: 'play', from: 'idle', to: 'loading' },
-        { event: 'play', from: 'loading', to: 'idle' },
-        { event: 'play', from: 'playing', handler: function stopCurrent(state, data) {
-            state.fireEvent('stop', {
-                stopping: state.currentData,
+    eventHandlers: [
+        { event: 'play', state: 'playing', handler: function stopThenPlayAgain(playingState, nextVideo) {
+            var currentVideo = playingState.getProperty('currentVideo');
+            playingState.fireEvent('stop', {
                 storeBookmark: true,
-                next: data
+                stopping: currentVideo,
+                next: nextVideo
             });
         } },
-        { event: 'play', from: 'stopping', handler: function queuePlay(stoppingState, data) {
+        { event: 'play', state: 'stopping', handler: function queuePlay(stoppingState, data) {
             console.log('got play event for ' + data.id + ', deferring');
-            stoppingState.nextData = data; // don't transition yet but schedule us to be next
+            stoppingState.setProperty('nextVideo', data); // don't transition yet but schedule us to be next
         } },
+    ],
+    transitions: [
         { event: 'stop', to: 'stopping' },
+        { event: 'play', from: 'idle', to: 'loading' },
+        { event: 'play', from: 'loading', to: 'idle' },
         { event: '_playbackStarted', from: 'loading', to: 'playing' },
         { event: '_playbackStopped', from: 'stopping', to: 'idle' }
     ],
@@ -81,19 +84,20 @@ var playerUi = new StateMachine({
             }
         },
         playing: {
-            onEnter: function(playingState, data) {
-                playingState.currentData = data;
+            onEnter: function(playingState, video) {
+                playingState.setProperty('currentVideo', video);
+
                 // heartbeat
                 interval(playingState, 1000)
                     .subscribe(function() {
-                        console.log('... still playing video', data.id);
+                        console.log('... still playing video', video.id);
                     });
                 // time out playback
                 timer(playingState, 3500)
                     .subscribe(function() {
                         playingState.fireEvent('stop', {
-                            error: data.error,
-                            stopping: playingState.currentData,
+                            error: video.error,
+                            stopping: playingState.getProperty('currentVideo'),
                             storeBookmark: true
                         });
                     });
@@ -101,7 +105,8 @@ var playerUi = new StateMachine({
         },
         stopping: {
             onEnter: function(stoppingState, data) {
-                stoppingState.nextData = data.next;
+                stoppingState.setProperty('nextVideo', data.next);
+
                 console.log('stopping video', data.stopping.id);
                 timer(stoppingState, 500)
                     .subscribe(function() {
@@ -110,7 +115,7 @@ var playerUi = new StateMachine({
                         }
                         stoppingState.fireEvent('_playbackStopped', {
                             error: data.error,
-                            next: stoppingState.nextData
+                            next: stoppingState.getProperty('nextVideo')
                         });
                     });
             }
@@ -118,17 +123,20 @@ var playerUi = new StateMachine({
     }
 });
 
-// TODO: debug mode showing all transitions (including nested)
-// TODO: private vs public event scoping (use .toObservable)
-// TODO: why did this.getEvent work ??!?!
-// TODO: getEvent should no longer be a subject, should have a takeUntil
-// TODO: add readEvent and writeEvent instead
-// TODO: add predicate for transitions (both string and function-based)
-// TODO: add handler instead of to for transitions
-// TODO: add functions for to property (selector) for transitions
-// TODO: add eventHandlers
-// TODO: how do we deal with currentData ???
-// TODO: properties array (e.g. ['current', 'next']) for backchannel / mutable state ?
+// [ ] TODO: debug mode showing all transitions (including nested)
+// [ ] TODO: private vs public event scoping (use .toObservable)
+// [ ] TODO: why did this.getEvent work ??!?!
+// [ ] TODO: getEvent should no longer be a subject, should have a takeUntil
+// [ ] TODO: add readEvent and writeEvent instead
+// [ ] TODO: add predicate for transitions (both string and function-based)
+// [ ] TODO: add handler instead of to for transitions
+// [ ] TODO: add functions for to property (selector) for transitions
+// [ ] TODO: add eventHandlers
+// [ ] TODO: data transformations ???
+// [x] TODO: deal with properties like nextVideo and currentVideo
+// [ ] TODO: exception safety (onUncaughtException ??? going down w/ no way to stop it)
+//   exits each state then calls its handler if any, handler can re-enter which cancels the bubbling
+// [ ] TODO: detect when my child StateMachine exits and start exiting too
 
 // Look at GALLERY_SIGNALS
 
@@ -141,7 +149,7 @@ var playerUi = new StateMachine({
 
 playerUi.transitions
     .subscribe(function(data) {
-        console.log('-> ' + data.to);
+        console.log('[', data.from + ' -> ' + data.to, ']');
     });
 
 // interrupt the next stopping playback
@@ -151,10 +159,7 @@ playerUi.transitions
     .take(1)
     .subscribe(function() {
         // fire a play event
-        playerUi.fireEvent('play', {
-            id: 4567,
-            error: 'your car is on fire!'
-        });
+        playerUi.fireEvent('play', { id: 4567 });
         // after our play starts and finishes, shut down
         playerUi.transitions
             .where(function(data) { return data.to === 'playing' })
