@@ -14,6 +14,11 @@ var playerUi = new StateMachine({
     events: ['play', 'stop'],
     privateEvents: ['playbackStarted', 'playbackStopped'],
     transientProperties: ['mixins', 'playerControl'],
+    onUncaughtException: function(playerUi, error) {
+        console.error('! ERROR:', error);
+        console.error('Shutting down player...');
+        playerUi.exit();
+    },
     transitions: [
         { event: 'play', from: 'idle', to: 'loading' },
         { event: 'stop', from: 'loading', to: 'idle' },
@@ -162,6 +167,9 @@ var playerUi = new StateMachine({
 var postPlay = new StateMachine({
     start: 'idle',
     states: ['idle', 'initializing', 'initialized', 'active', 'showing'],
+    onUncaughtException: function(postPlayState, error) {
+        console.error('Postplay got error:', error);
+    },
     onEnter: function(postPlayState, playerUiData) {
         var state = playerUiData.state;
         if (state.hasProperty('currentVideo')) {
@@ -224,6 +232,7 @@ function onNextEnter(state, callback) {
         .where(function(data) { return data.to === state; })
         .delay(100)
         .take(1)
+        .where(function() { return playerUi.isEntered })
         .doAction(callback.bind(null, playerUi))
         .subscribe(NOOP);
 }

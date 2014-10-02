@@ -387,7 +387,7 @@ describe('StateMachine', function() {
                 start: 'state',
                 states: {
                     state: {
-                        onEnter: function() { throw "foo"; }
+                        onEnter: function() { throw new Error('foo'); }
                     }
                 }
             });
@@ -401,7 +401,7 @@ describe('StateMachine', function() {
                 start: 'a',
                 states: [
                     'a',
-                    { name: 'b', onEnter: function() { throw "bar"; } }
+                    { name: 'b', onEnter: function() { throw new Error("bar"); } }
                 ],
             });
 
@@ -413,7 +413,7 @@ describe('StateMachine', function() {
             var fsm = new StateMachine({
                 start: 'a',
                 states: [
-                    { name: 'a', onExit: function() { throw "baz" } },
+                    { name: 'a', onExit: function() { throw new Error("baz"); } },
                     'b'
                 ],
             });
@@ -429,7 +429,7 @@ describe('StateMachine', function() {
                     a: {
                         start: 'b',
                         states: {
-                            b: { onEnter: function() { throw "quux" } }
+                            b: { onEnter: function() { throw new Error("quux") } }
                         }
                     }
                 },
@@ -450,9 +450,11 @@ describe('StateMachine', function() {
                         ],
                         states: {
                             b: {},
-                            c: { onEnter: function() {
-                                throw "quux"
-                            } }
+                            c: {
+                                onEnter: function() {
+                                    throw new Error("quux");
+                                }
+                            }
                         }
                     }
                 },

@@ -74,27 +74,26 @@ StateMachine.prototype = {
     _entered: false,
     _hasQueuedExit: false,
     _queuedExitData: undefined,
+    _hasQueuedEnter: false,
+    _queuedEnterData: undefined,
     _queuedTransitions: null,
     _isTransitioning: false,
     _eventHandlerObservablesByState: null,
     _canAccessPrivateEvents: false,
 
+    get isEntered() { return this._entered; },
+
     currentStateName: null,
 
     _onUncaughtException: function(error) {
-        if (this._entered) {
-            var ancestor;
-            do {
-                ancestor = ancestor ? ancestor.parent : this;
-                ancestor._isTransitioning = false;
-                ancestor._canAccessPrivateEvents = false;
-                ancestor._queuedTransitions = null;
-                ancestor._queuedExitData = undefined;
-                ancestor._hasQueuedExit = false;
-            } while (ancestor.parent)
-            ancestor.exit();
+        var currentState = this;
+        while (currentState) {
+            var onUncaughtException = this._props.onUncaughtException;
+            if (typeof onUncaughtException === 'function') {
+                onUncaughtException(currentState, error);
+            }
+            currentState = currentState.parent;
         }
-        throw error;
     },
 
     _createStatesObject: function(states) {
@@ -307,10 +306,18 @@ StateMachine.prototype = {
 
     enter: function(data) {
         if (this._entered) {
-            return;
+            if (!this._hasQueuedExit) {
+                return;
+            } else {
+                this._hasQueuedEnter = true;
+                this._queuedEnterData = data;
+                return;
+            }
         }
         var couldAccessPrivateEvents = this._canAccessPrivateEvents;
 
+        this._hasQueuedEnter = false;
+        this._queuedEnterData = undefined;
         this._canAccessPrivateEvents = true;
         this._entered = true; // we set this flag here so we can transition more on the way in
         this._enters && this._enters.onNext(data);
@@ -551,6 +558,12 @@ StateMachine.prototype = {
             this._queuedExitData = undefined;
             this.exit(data);
         }
+        if (this._hasQueuedEnter) {
+            var data = this._queuedEnterData;
+            this._hasQueuedEnter = false;
+            this._queuedEnterData = undefined;
+            this.enter(data);
+        }
     },
 
     /**
@@ -568,7 +581,7 @@ StateMachine.prototype = {
         } else if (this.parent && typeof this.parent.setProperty === 'function') {
             this.parent.setProperty(name, value);
         } else {
-            throw new Error("Can't set undeclared property: " + name);
+            throw new Error("StateMachine Error: Can't set undeclared property: " + name);
         }
     },
 
@@ -586,7 +599,7 @@ StateMachine.prototype = {
         } else if (this.parent && typeof this.parent.getProperty === 'function') {
             return this.parent.getProperty(name);
         } else {
-            throw new Error("Can't get undeclared property: " + name);
+            throw new Error("StateMachine Error: Can't get undeclared property: " + name);
         }
     },
 

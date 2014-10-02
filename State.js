@@ -64,21 +64,26 @@ State.prototype = {
      * @return {Boolean}  Whether we were able to enter the state.
      */
     enter: function(data) {
-        if (!this.canEnter())
+        try {
+            if (!this.canEnter())
+                return false;
+
+            var enters = this._enters;
+            var behavior = this._behavior;
+            var beforeEnter = behavior.beforeEnter;
+            var onEnter = this._props.onEnter;
+            var afterEnter = behavior.afterEnter;
+
+            this._entered = true;
+            enters && enters.onNext(data);
+            beforeEnter && beforeEnter(this, data);
+            onEnter && onEnter(this, data);
+            afterEnter && afterEnter(this, data);
+            return true;
+        } catch (error) {
+            this._onUncaughtException(error);
             return false;
-
-        var enters = this._enters;
-        var behavior = this._behavior;
-        var beforeEnter = behavior.beforeEnter;
-        var onEnter = this._props.onEnter;
-        var afterEnter = behavior.afterEnter;
-
-        this._entered = true;
-        enters && enters.onNext(data);
-        beforeEnter && beforeEnter(this, data);
-        onEnter && onEnter(this, data);
-        afterEnter && afterEnter(this, data);
-        return true;
+        }
     },
 
     /**
@@ -95,21 +100,26 @@ State.prototype = {
      * @return {Boolean} Whether we were able to exit the state.
      */
     exit: function(data) {
-        if (!this.canExit())
+        try {
+            if (!this.canExit())
+                return false;
+
+            var exits = this._exits;
+            var behavior = this._behavior;
+            var beforeExit = behavior.beforeExit;
+            var onExit = this._props.onExit;
+            var afterExit = behavior.afterExit;
+
+            beforeExit && beforeExit(this, data);
+            onExit && onExit(this, data);
+            afterExit && afterExit(this, data);
+            exits && exits.onNext(data);
+            this._entered = false;
+            return true;
+        } catch (error) {
+            this._onUncaughtException(error);
             return false;
-
-        var exits = this._exits;
-        var behavior = this._behavior;
-        var beforeExit = behavior.beforeExit;
-        var onExit = this._props.onExit;
-        var afterExit = behavior.afterExit;
-
-        beforeExit && beforeExit(this, data);
-        onExit && onExit(this, data);
-        afterExit && afterExit(this, data);
-        exits && exits.onNext(data);
-        this._entered = false;
-        return true;
+        }
     },
 
     /**
@@ -192,7 +202,7 @@ State.prototype = {
         } else if (this.parent && typeof this.parent.setProperty === 'function') {
             this.parent.setProperty(name, value);
         } else {
-            throw new Error("Can't set undeclared property: " + name);
+            throw new Error("State Error: Can't set undeclared property: " + name);
         }
     },
 
@@ -210,7 +220,7 @@ State.prototype = {
         } else if (this.parent && typeof this.parent.getProperty === 'function') {
             return this.parent.getProperty(name);
         } else {
-            throw new Error("Can't get undeclared property: " + name);
+            throw new Error("State Error: Can't get undeclared property: " + name);
         }
     },
 
@@ -229,7 +239,18 @@ State.prototype = {
         } else {
             return false;
         }
-    }
+    },
+
+    _onUncaughtException: function(error) {
+        var currentState = this;
+        while (currentState) {
+            var onUncaughtException = currentState._props.onUncaughtException;
+            if (typeof onUncaughtException === 'function') {
+                onUncaughtException(currentState, error);
+            }
+            currentState = currentState.parent;
+        }
+    },
 
 };
 

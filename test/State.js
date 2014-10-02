@@ -366,4 +366,53 @@ describe('State', function() {
 
     })
 
+    describe('#hasProperty', function() {
+
+        it('is a method', function() {
+            expect(State.prototype.hasProperty).toBeA(Function);
+        })
+
+        it('checks to see if a given name is in this state\'s transientProperties', function() {
+            var s = new State({
+                transientProperties: ['a']
+            });
+            expect(s.hasProperty('b')).toBe(false);
+            expect(s.hasProperty('a')).toBe(true);
+        })
+
+        it('checks to see if a given name is in this state\'s transientProperties', function() {
+            var s = new State({
+                transientProperties: ['a']
+            });
+            expect(s.hasProperty('b')).toBe(false);
+            expect(s.hasProperty('a')).toBe(true);
+        })
+
+        it('checks up the parent state chain if it can\'t find a property', function() {
+            var parent = new State({ transientProperties: ['a'] });
+            var child = new State({}, {}, parent);
+            expect(child.hasProperty('a')).toBe(true);
+            expect(child.hasProperty('b')).toBe(false);
+        })
+
+    })
+
+    describe('#getProperty', function() {
+
+        it('is a method', function() {
+            expect(State.prototype.getProperty).toBeA(Function);
+        })
+
+        it('throws if the property is not declared in transientProperties (or its parent\'s)', function() {
+            var s = new State({
+                transientProperties: ['a']
+            });
+            expect(function() { s.getProperty('b') }).toThrow();
+            expect(function() { s.getProperty('a') }).toNotThrow();
+        })
+
+        it('gets a previously set property value')
+
+    })
+
 })
