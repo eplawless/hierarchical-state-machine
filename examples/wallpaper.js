@@ -4,7 +4,7 @@ function NOOP() {}
 
 var heroImageRotator = new StateMachine({
     start: 'stopped',
-    events: ['wait'],
+    events: ['stopped'],
     states: ['stopped', 'rotating', 'waiting'],
 });
 

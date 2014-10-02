@@ -1,5 +1,4 @@
 var tryToGet = require('./tryToGet');
-var tryToCall = require('./tryToCall');
 var Event = require('./Event');
 var State = require('./State');
 var UNIT = Object.freeze({});
@@ -451,7 +450,9 @@ StateMachine.prototype = {
         this._canAccessPrivateEvents = couldAccessPrivateEvents;
         this._hasQueuedExit = false;
         delete this._queuedExitData;
-        this._queuedTransitions.length = 0;
+        if (this._queuedTransitions) {
+            this._queuedTransitions.length = 0;
+        }
     },
 
     _exitNestedState: function(stateName, stateProps, stateBehavior, data) {
@@ -559,9 +560,16 @@ StateMachine.prototype = {
      * @param {?} value
      */
     setProperty: function(name, value) {
-        var properties = this._properties || {};
-        properties[name] = value;
-        this._properties = properties;
+        var propertyNames = this._props.transientProperties;
+        if (Array.isArray(propertyNames) && propertyNames.indexOf(name) > -1) {
+            var propertyValuesByName = this._propertyValuesByName || {};
+            propertyValuesByName[name] = value;
+            this._propertyValuesByName = propertyValuesByName;
+        } else if (this.parent && typeof this.parent.setProperty === 'function') {
+            this.parent.setProperty(name, value);
+        } else {
+            throw new Error("Can't set undeclared property: " + name);
+        }
     },
 
     /**
@@ -571,8 +579,31 @@ StateMachine.prototype = {
      * @return {?} value
      */
     getProperty: function(name) {
-        if (this._properties) {
-            return this._properties[name];
+        var propertyNames = this._props.transientProperties;
+        if (Array.isArray(propertyNames) && propertyNames.indexOf(name) > -1) {
+            var propertyValuesByName = this._propertyValuesByName;
+            return propertyValuesByName && propertyValuesByName[name];
+        } else if (this.parent && typeof this.parent.getProperty === 'function') {
+            return this.parent.getProperty(name);
+        } else {
+            throw new Error("Can't get undeclared property: " + name);
+        }
+    },
+
+    /**
+     * Checks for a mutable property from this State object.
+     *
+     * @param {String} name
+     * @return {Boolean}
+     */
+    hasProperty: function(name) {
+        var propertyNames = this._props.transientProperties;
+        if (Array.isArray(propertyNames) && propertyNames.indexOf(name) > -1) {
+            return true;
+        } else if (this.parent && typeof this.parent.getProperty === 'function') {
+            return this.parent.hasProperty(name);
+        } else {
+            return false;
         }
     }
 

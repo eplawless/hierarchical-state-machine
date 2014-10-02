@@ -13,6 +13,7 @@ var playerUi = new StateMachine({
     start: 'idle',
     events: ['play', 'stop'],
     privateEvents: ['playbackStarted', 'playbackStopped'],
+    transientProperties: ['mixins', 'playerControl'],
     transitions: [
         { event: 'play', from: 'idle', to: 'loading' },
         { event: 'stop', from: 'loading', to: 'idle' },
@@ -101,15 +102,12 @@ var playerUi = new StateMachine({
             }
         },
         playing: {
+            transientProperties: ['currentVideo'],
             onEnter: function(playingState, video) {
                 playingState.setProperty('currentVideo', video);
 
-                // pretend you didn't see this
-                var ancestor = playingState;
-                while (ancestor.parent) ancestor = ancestor.parent;
-
-                var mixins = ancestor.getProperty('mixins');
-                var playerControl = ancestor.getProperty('playerControl');
+                var mixins = playingState.getProperty('mixins');
+                var playerControl = playingState.getProperty('playerControl');
 
                 // register mixins
                 mixins.forEach(function(mixin) {
@@ -138,6 +136,7 @@ var playerUi = new StateMachine({
             }
         },
         stopping: {
+            transientProperties: ['nextVideo'],
             onEnter: function(stoppingState, stopEvent) {
                 stoppingState.setProperty('nextVideo', stopEvent.next);
 
@@ -163,8 +162,14 @@ var playerUi = new StateMachine({
 var postPlay = new StateMachine({
     start: 'idle',
     states: ['idle', 'initializing', 'initialized', 'active', 'showing'],
-    onEnter: function(postPlayState, playerUiPlayingState) {
-        console.log(playerUiPlayingState.getProperty('currentVideo'));
+    onEnter: function(postPlayState, playerUiData) {
+        var state = playerUiData.state;
+        if (state.hasProperty('currentVideo')) {
+            var currentVideo = state.getProperty('currentVideo');
+            if (currentVideo) {
+                console.log('postplay knows about video ' + currentVideo.id);
+            }
+        }
     }
 });
 
@@ -173,7 +178,7 @@ var playerControl = {
     playbackStarted: new Rx.Subject,
     updatePts: new Rx.Subject,
     playbackEnded: new Rx.Subject,
-    playMovie: function(videoId) {
+    play: function(videoId) {
         // TODO: woohoo
     },
     stop: function() {

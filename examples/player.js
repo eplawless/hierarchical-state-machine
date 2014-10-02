@@ -101,6 +101,7 @@ var playerUi = new StateMachine({
             }
         },
         playing: {
+            transientProperties: ['currentVideo'],
             onEnter: function(playingState, video) {
                 playingState.setProperty('currentVideo', video);
 
@@ -122,6 +123,7 @@ var playerUi = new StateMachine({
             }
         },
         stopping: {
+            transientProperties: ['nextVideo'],
             onEnter: function(stoppingState, stopEvent) {
                 stoppingState.setProperty('nextVideo', stopEvent.next);
 
