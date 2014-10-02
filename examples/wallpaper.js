@@ -7,59 +7,55 @@ function NOOP() {}
  */
 var heroImageRotator = new StateMachine({
     start: 'idle',
-    events: ['stop', 'rotate', 'pause'],
+    events: ['stop', 'rotate', 'wait'],
     allowSelfTransitions: true,
     transitions: [
         { event: 'stop', to: 'idle' },
         { event: 'rotate', to: 'active' }
     ],
-    onUncaughtException: function(heroImageRotator, error) {
-        console.error('ERROR:', error);
-    },
-    transientProperties: ['imageSources', 'idxImage', 'isLoaded', 'interval'],
+    transientProperties: [
+        'imageSources',
+        'idxCurrentImage',
+        'areImagesLoaded',
+        'rotationInterval'
+    ],
+    onUncaughtException: logError,
     states: {
-        'idle': { onEnter: activateIfNecessary },
+        'idle': {
+            onEnter: activateIfNecessary
+        },
         'active': {
             start: 'loading',
+            events: ['loaded', 'doneWaiting'],
             states: {
                 'loading': { onEnter: loadImages },
                 'rotating': { onEnter: rotateImages },
-                'paused': { onEnter: pause }
+                'waiting': { onEnter: wait }
             },
-            events: ['loaded', 'doneWaiting'],
+            onEnter: updateImagesAndStartRotating,
             allowSelfTransitions: true,
             transitions: [
-                { event: 'pause', from: 'rotating', to: 'paused' },
-                { event: 'pause', from: 'paused', to: 'paused' },
+                { event: 'wait', from: 'rotating', to: 'waiting' },
+                { event: 'wait', from: 'waiting', to: 'waiting' },
                 { event: 'loaded', from: 'loading', to: 'rotating' },
-                { event: 'doneWaiting', from: 'paused', to: 'rotating' },
+                { event: 'doneWaiting', from: 'waiting', to: 'rotating' },
             ],
-            onEnter: function(activeState, data) {
-                // take any new image sources
-                if (data && typeof data === 'object' && 'imageSources' in data) {
-                    activeState.setProperty('isLoaded', false);
-                    activeState.setProperty('imageSources', data.imageSources);
-                    activeState.setProperty('idxImage', 0);
-                }
-
-                // jump back to idle if we don't have any image sources
-                var imageSources = activeState.getProperty('imageSources');
-                if (!Array.isArray(imageSources) || imageSources.length === 0) {
-                    activeState.fireEvent('stop');
-                    return;
-                }
-
-                // skip the loading state if we've already loaded our images
-                if (activeState.getProperty('isLoaded')) {
-                    activeState.transition('rotating');
-                }
-            },
         }
     }
 });
 
 /**
- * If we've got new image sources, start rotating with those, otherwise chill here.
+ * Log a thrown exception to stderr
+ *
+ * @param {State} heroImageRotator
+ * @param {?} error
+ */
+function logError(heroImageRotator, error) {
+    console.error('ERROR:', error);
+}
+
+/**
+ * If we've got new images, activate, otherwise stay here.
  *
  * @para {State} idleState
  * @param [data]
@@ -67,8 +63,32 @@ var heroImageRotator = new StateMachine({
  */
 function activateIfNecessary(idleState, data) {
     console.log('HeroImageRotator: idle');
-    if (data && data.imageSources) {
+    if (data && typeof data === 'object' && 'imageSources' in data) {
         idleState.fireEvent('rotate', data);
+    }
+}
+
+/**
+ * If we've got new images then move into rotation (loading first if necessary).
+ * If we don't have any images to rotate, deactivate.
+ *
+ * @param {State} activeState
+ * @param {Object} [data]
+ * @param {Object} [data.imageSources]
+ */
+function updateImagesAndStartRotating(activeState, data) {
+    // take any new images
+    if (data && typeof data === 'object' && 'imageSources' in data) {
+        activeState.setProperty('areImagesLoaded', false);
+        activeState.setProperty('imageSources', data.imageSources);
+        activeState.setProperty('idxCurrentImage', 0);
+    }
+
+    // jump back to idle if we don't have any images
+    var imageSources = activeState.getProperty('imageSources');
+    if (!Array.isArray(imageSources) || imageSources.length === 0) {
+        activeState.fireEvent('stop');
+        return;
     }
 }
 
@@ -79,9 +99,17 @@ function activateIfNecessary(idleState, data) {
  * @param {Object} [data]
  */
 function loadImages(loadingState, data) {
+    // skip the loading state if we've already loaded our images
+    if (loadingState.getProperty('areImagesLoaded')) {
+        loadingState.fireEvent('loaded', data);
+        return;
+    }
+
     var imageSources = loadingState.getProperty('imageSources');
     console.log('HeroImageRotator: loading', imageSources.length, 'images');
 
+
+    // pretend to load all the images we have
     Rx.Observable.interval(300)
         .takeUntil(loadingState.exits)
         .take(imageSources.length)
@@ -92,7 +120,7 @@ function loadImages(loadingState, data) {
             },
             onCompleted: function() {
                 console.log('HeroImageRotator: Loaded all images');
-                loadingState.setProperty('isLoaded', true);
+                loadingState.setProperty('areImagesLoaded', true);
                 loadingState.fireEvent('loaded', data);
             }
         });
@@ -110,22 +138,23 @@ function rotateImages(rotatingState, data) {
 
     // show first image
     var imageSources = rotatingState.getProperty('imageSources');
-    var idxImage = rotatingState.getProperty('idxImage');
-    console.log('HeroImageRotator: showing image', imageSources[idxImage]);
+    var idxCurrentImage = rotatingState.getProperty('idxCurrentImage');
+    console.log('HeroImageRotator: showing image', imageSources[idxCurrentImage]);
 
     // show the other images on an interval
-    if (data && data.interval) {
-        rotatingState.setProperty('interval', data.interval);
+    if (data && typeof data === 'object' && 'interval' in data) {
+        rotatingState.setProperty('rotationInterval', data.interval);
     }
-    var interval = rotatingState.getProperty('interval') || 2000;
+    var interval = rotatingState.getProperty('rotationInterval') || 2000;
+
     Rx.Observable.interval(interval)
         .takeUntil(rotatingState.exits)
         .map(function() {
-            return rotatingState.getProperty('idxImage');
+            return rotatingState.getProperty('idxCurrentImage');
         })
         .subscribe(function(idxLast) {
             var idx = (idxLast + 1) % imageSources.length;
-            rotatingState.setProperty('idxImage', idx);
+            rotatingState.setProperty('idxCurrentImage', idx);
             console.log('HeroImageRotator: showing image', imageSources[idx]);
         });
 }
@@ -135,32 +164,32 @@ function rotateImages(rotatingState, data) {
  *
  * Negative or falsy duration causes an immediate return to rotating state.
  * Infinity duration stays in this state until told otherwise.
- * Positive duration pauses here for the specified number of milliseconds.
+ * Positive duration waits here for the specified number of milliseconds.
  *
- * @param {State} pausedState
+ * @param {State} waitingState
  * @param {Object} [data]
  * @param {Number} [data.duration]
  */
-function pause(pausedState, data) {
+function wait(waitingState, data) {
     // ignore negative or falsy durations
     if (!data || !data.duration || data.duration <= 0) {
-        console.log('HeroImageRotator: no pause duration, skipping');
-        pausedState.fireEvent('doneWaiting');
+        console.log('HeroImageRotator: no wait duration, skipping');
+        waitingState.fireEvent('doneWaiting');
         return;
     }
 
     // stay here until told otherwise for Infinity durations
     if (data.duration === Infinity) {
-        console.log('HeroImageRotator: paused until we\'re told to resume');
+        console.log('HeroImageRotator: waiting until we\'re told to resume');
         return;
     }
 
-    // pause then go back to rotating for positive durations
-    console.log('HeroImageRotator: paused', data.duration, 'ms');
+    // wait then go back to rotating for positive durations
+    console.log('HeroImageRotator: waiting', data.duration, 'ms');
     Rx.Observable.timer(data.duration)
-        .takeUntil(pausedState.exits)
+        .takeUntil(waitingState.exits)
         .subscribe(function() {
-            pausedState.fireEvent('doneWaiting');
+            waitingState.fireEvent('doneWaiting');
         });
 }
 
@@ -176,7 +205,7 @@ heroImageRotator.fireEvent('rotate', {
 });
 
 function fireWaitEvent(duration) {
-    heroImageRotator.fireEvent('pause', {
+    heroImageRotator.fireEvent('wait', {
         duration: duration
     });
 }
@@ -190,6 +219,8 @@ stdin.on('data', function(key){
         process.exit();
         return;
     }
-    if (key === 'f') fireWaitEvent(Infinity);
-    else fireWaitEvent(~~(Math.random()*2000));
+    if (key === 'i') fireWaitEvent(Infinity);
+    else if (key === 'w') fireWaitEvent(~~(Math.random()*2000));
+    else if (key === 'r') heroImageRotator.fireEvent('rotate');
+    else if (key === 's') heroImageRotator.fireEvent('stop');
 });
