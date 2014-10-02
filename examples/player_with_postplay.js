@@ -104,8 +104,24 @@ var playerUi = new StateMachine({
             onEnter: function(playingState, video) {
                 playingState.setProperty('currentVideo', video);
 
+                // pretend you didn't see this
+                var ancestor = playingState;
+                while (ancestor.parent) ancestor = ancestor.parent;
+
+                var mixins = ancestor.getProperty('mixins');
+                var playerControl = ancestor.getProperty('playerControl');
+
+                // register mixins
+                mixins.forEach(function(mixin) {
+                    mixin.exit();
+                    mixin.enter({
+                        state: playingState,
+                        playerControl: playerControl
+                    });
+                });
+
                 // heartbeat
-                interval(playingState, 1000)
+                playerControl.play(video.id)
                     .subscribe(function() {
                         console.log('... still playing video', video.id);
                     });
@@ -143,6 +159,31 @@ var playerUi = new StateMachine({
         }
     }
 });
+
+var postPlay = new StateMachine({
+    start: 'idle',
+    states: ['idle', 'initializing', 'initialized', 'active', 'showing'],
+    onEnter: function(postPlayState, playerUiPlayingState) {
+        console.log(playerUiPlayingState.getProperty('currentVideo'));
+    }
+});
+
+var playerControl = {
+    _stops: new Rx.Subject,
+    playbackStarted: new Rx.Subject,
+    updatePts: new Rx.Subject,
+    playbackEnded: new Rx.Subject,
+    playMovie: function(videoId) {
+        // TODO: woohoo
+    },
+    stop: function() {
+        this._stops.onNext();
+        this.currentMovie = null;
+    }
+};
+
+playerUi.setProperty('mixins', [postPlay]);
+playerUi.setProperty('playerControl', playerControl);
 
 // [ ] TODO: debug mode showing all transitions (including nested)
 // [x] TODO: private vs public event scoping (use .toObservable)
@@ -208,4 +249,3 @@ function interruptStopping() {
         })
     })
 }
-

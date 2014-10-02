@@ -17,22 +17,15 @@ var abc = new StateMachine({
 
 abc.setBehavior({
     states: {
-        a: {
-            afterEnter: output('-> a'),
-            beforeExit: output('<- a')
-        },
-        b: {
-            afterEnter: output('-> b'),
-            beforeExit: output('<- b')
-        },
-        c: {
-            afterEnter: output('-> c'),
-            beforeExit: output('<- c')
-        },
+        a: { afterEnter: output('entering a'), beforeExit: output('exiting a') },
+        b: { afterEnter: output('entering b'), beforeExit: output('exiting b') },
+        c: { afterEnter: output('entering c'), beforeExit: output('exiting c') },
     }
 });
 
 abc.enter();
 
 Rx.Observable.interval(1000)
-    .subscribe(abc.getEvent('next'));
+    .subscribe(function() {
+        abc.fireEvent('next');
+    });

@@ -60,6 +60,8 @@ function StateMachine(props, behavior, parent) {
     this._events = this._createEvents(this._props.events);
     this._privateEvents = this._createEvents(this._props.privateEvents);
 
+    this._onUncaughtException = this._onUncaughtException.bind(this);
+
 }
 
 StateMachine.prototype = {
@@ -79,6 +81,22 @@ StateMachine.prototype = {
     _canAccessPrivateEvents: false,
 
     currentStateName: null,
+
+    _onUncaughtException: function(error) {
+        if (this._entered) {
+            var ancestor;
+            do {
+                ancestor = ancestor ? ancestor.parent : this;
+                ancestor._isTransitioning = false;
+                ancestor._canAccessPrivateEvents = false;
+                ancestor._queuedTransitions = null;
+                ancestor._queuedExitData = undefined;
+                ancestor._hasQueuedExit = false;
+            } while (ancestor.parent)
+            ancestor.exit();
+        }
+        throw error;
+    },
 
     _createStatesObject: function(states) {
         if (!states || typeof states !== 'object') {
@@ -327,9 +345,7 @@ StateMachine.prototype = {
             }
 
         } catch (e) {
-            this._isTransitioning = false;
-            this.exit();
-            throw e;
+            this._onUncaughtException(e);
         }
 
         // allow before/on/afterEnter to transition us first
@@ -522,9 +538,7 @@ StateMachine.prototype = {
                 );
             }
         } catch(e) {
-            this._isTransitioning = false;
-            this.exit();
-            throw e;
+            this._onUncaughtException(e);
         }
 
         this._isTransitioning = false;

@@ -380,4 +380,88 @@ describe('StateMachine', function() {
 
     })
 
+    describe('exception handling', function() {
+
+        it('throws exceptions from its start state\'s onEnter method when entering', function() {
+            var fsm = new StateMachine({
+                start: 'state',
+                states: {
+                    state: {
+                        onEnter: function() { throw "foo"; }
+                    }
+                }
+            });
+
+            expect(function() { fsm.enter(); }).toThrow();
+            expect(fsm._entered).toBe(false);
+        })
+
+        it('throws exceptions from the next state\'s onEnter method when transitioning', function() {
+            var fsm = new StateMachine({
+                start: 'a',
+                states: [
+                    'a',
+                    { name: 'b', onEnter: function() { throw "bar"; } }
+                ],
+            });
+
+            fsm.enter();
+            expect(function() { fsm.transition('b'); }).toThrow();
+        })
+
+        it('throws exceptions from the first state\'s onExit method when transitioning', function() {
+            var fsm = new StateMachine({
+                start: 'a',
+                states: [
+                    { name: 'a', onExit: function() { throw "baz" } },
+                    'b'
+                ],
+            });
+
+            fsm.enter();
+            expect(function() { fsm.transition('b'); }).toThrow();
+        })
+
+        it('throws exceptions from a nested state\'s onEnter method when entering', function() {
+            var fsm = new StateMachine({
+                start: 'a',
+                states: {
+                    a: {
+                        start: 'b',
+                        states: {
+                            b: { onEnter: function() { throw "quux" } }
+                        }
+                    }
+                },
+            });
+
+            expect(function() { fsm.enter(); }).toThrow();
+        })
+
+        it('throws exceptions from a nested state\'s onEnter method on an event transition', function() {
+            var fsm = new StateMachine({
+                start: 'a',
+                events: ['x'],
+                states: {
+                    a: {
+                        start: 'b',
+                        transitions: [
+                            { event: 'x', from: 'b', to: 'c' }
+                        ],
+                        states: {
+                            b: {},
+                            c: { onEnter: function() {
+                                throw "quux"
+                            } }
+                        }
+                    }
+                },
+            });
+
+            fsm.enter();
+            expect(function() { fsm.fireEvent('x') }).toThrow();
+        })
+
+    })
+
 })

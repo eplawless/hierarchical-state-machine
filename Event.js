@@ -1,8 +1,8 @@
 var Rx = require('rx');
 function NOOP() {}
 
-function Event() {
-    Rx.Subject.apply(this, arguments);
+function Event(onError) {
+    Rx.Subject.apply(this);
 }
 
 Event.prototype = {
