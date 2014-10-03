@@ -6,6 +6,7 @@ function NOOP() {}
  * State machine for the Hero Image Rotator.
  */
 var heroImageRotator = new StateMachine({
+    onUncaughtException: logError,
     start: 'idle',
     events: ['stop', 'rotate', 'wait'],
     allowSelfTransitions: true,
@@ -19,20 +20,11 @@ var heroImageRotator = new StateMachine({
         'areImagesLoaded',
         'rotationInterval'
     ],
-    onUncaughtException: logError,
     states: {
-        'idle': {
-            onEnter: activateIfNecessary
-        },
+        'idle': { onEnter: activateIfNecessary },
         'active': {
             start: 'loading',
             events: ['loaded', 'doneWaiting'],
-            states: {
-                'loading': { onEnter: loadImages },
-                'rotating': { onEnter: rotateImages },
-                'waiting': { onEnter: wait }
-            },
-            onEnter: updateImagesAndStartRotating,
             allowSelfTransitions: true,
             transitions: [
                 { event: 'wait', from: 'rotating', to: 'waiting' },
@@ -40,6 +32,12 @@ var heroImageRotator = new StateMachine({
                 { event: 'loaded', from: 'loading', to: 'rotating' },
                 { event: 'doneWaiting', from: 'waiting', to: 'rotating' },
             ],
+            onEnter: updateImagesAndStartRotating,
+            states: {
+                'loading': { onEnter: loadImages },
+                'rotating': { onEnter: rotateImages },
+                'waiting': { onEnter: wait }
+            },
         }
     }
 });
@@ -107,7 +105,6 @@ function loadImages(loadingState, data) {
 
     var imageSources = loadingState.getProperty('imageSources');
     console.log('HeroImageRotator: loading', imageSources.length, 'images');
-
 
     // pretend to load all the images we have
     Rx.Observable.interval(300)
