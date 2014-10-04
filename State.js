@@ -26,11 +26,52 @@ function State(props, behavior, parent) {
     this._entered = false;
     this._properties = null;
     this.parent = parent;
+    this._transitionsByEvent = this._createTransitionsByEvent(this._props.transitions);
 }
 
 State.prototype = {
 
     __proto__: State.prototype, // for .constructor queries
+
+    _createTransitionsByEvent: function(transitions) {
+        var result = {};
+        if (!Array.isArray(transitions)) {
+            return result;
+        }
+
+        for (var idx = 0; idx < transitions.length; ++idx) {
+            var transition = transitions[idx];
+            var to = transition.to;
+            var event = transition.event;
+            var force = transition.force;
+            var isParentTransition = transition.parent;
+            if (isParentTransition && !this.parent)
+                throw this._getMissingPropertyError('Transition', transition, 'parent');
+
+            var self = isParentTransition ? this.parent : this;
+
+            if (!to)
+                throw this._getMissingPropertyError('Transition', transition, 'to');
+            if (!event)
+                throw this._getMissingPropertyError('Transition', transition, 'event');
+            if (!self._getAncestorWithEvent(event))
+                throw this._getInvalidPropertyError('Transition', transition, 'event');
+
+            result[event] = { to: to, force: force };
+        }
+
+        return result;
+    },
+
+    _getMissingPropertyError: function(type, transition, propertyName) {
+        return new Error("StateMachine Error: " + type + " " + JSON.stringify(transition) + "\n" +
+            "  Missing " + (propertyName ?"'"+propertyName+"' " : "") + "property.");
+    },
+
+    _getInvalidPropertyError: function(type, transition, propertyName) {
+        return new Error("StateMachine Error: " + type + " " + JSON.stringify(transition) + "\n" +
+            "  Invalid " + (propertyName ?"'"+propertyName+"' " : "") + "property.");
+    },
 
     /**
      * Lazily-instantiated Observable fired just before the before/on/afterEnter handlers.
@@ -153,27 +194,60 @@ State.prototype = {
     },
 
     /**
-     * Asks its parent StateMachine for a named event stream.
-     *
-     * @param {String} name
-     * @return {Event}
+     * @param {String} name  The name of the event to fire.
+     * @param {?} [data]  Optional data to pass into the event.
+     * @return {Boolean}  Whether the event was handled.
      */
-    getEvent: function(name) {
-        return this.getParentEvent(name);
+    _fireEvent: function(name, data) {
+        var eventHandlers = this._props.eventHandlers;
+        var eventHandler = eventHandlers && eventHandlers[name];
+        if (typeof eventHandler === 'function') {
+            var isHandled = true;
+            var event = {
+                data: data,
+                isHandled: true,
+                propagate: function() { isHandled = false; }
+            };
+            eventHandler(this, event);
+            if (isHandled) return true;
+        }
+        var transition = this._transitionsByEvent[name];
+        if (transition && this.parent) {
+            this.parent.transition(transition.to, data, transition.force);
+            return true;
+        }
+        return false;
+    },
+
+    _getAncestorWithEvent: function(name) {
+        var ancestor = this;
+        while (ancestor) {
+            var events = ancestor._props.events;
+            var privateEvents = ancestor._props.privateEvents;
+            if (Array.isArray(events) && events.indexOf(name) >= 0 ||
+                Array.isArray(privateEvents) && privateEvents.indexOf(name) >= 0) {
+                return ancestor;
+            }
+            ancestor = ancestor.parent;
+        }
     },
 
     /**
-     * Tries to get the named event stream and optionally onNext data into it.
-     *
-     * @param {String} name  The name of the event stream to get.
+     * @param {String} name  The name of the event to fire.
      * @param {?} [data]  Optional data to pass into the event.
-     * @return {Boolean}  Whether the event was fired.
+     * @return {Boolean}  Whether the event was handled.
      */
     fireEvent: function(name, data) {
-        var event = this.getEvent(name);
-        event && event.onNext(data);
-        return !!event;
+        var ancestor = this._getAncestorWithEvent(name);
+        if (ancestor) {
+            while (ancestor && ancestor.parent) {
+                ancestor = ancestor.parent;
+            }
+            return ancestor._fireEvent(name, data);
+        }
+        return false;
     },
+
 
     /**
      * Asks its parent StateMachine for a named event stream.
@@ -242,14 +316,26 @@ State.prototype = {
     },
 
     _onUncaughtException: function(error) {
+        var isHandled = false;
+        var event = {
+            error: error,
+            stopPropagation: function() { isHandled = true; }
+        };
         var currentState = this;
         while (currentState) {
             var onUncaughtException = currentState._props.onUncaughtException;
             if (typeof onUncaughtException === 'function') {
-                onUncaughtException(currentState, error);
+                onUncaughtException(currentState, event);
+                if (isHandled)
+                    break;
             }
             currentState = currentState.parent;
         }
+        var ancestor = this;
+        while (ancestor && ancestor.parent) {
+            ancestor = ancestor.parent;
+        }
+        ancestor.exit(error);
     },
 
 };

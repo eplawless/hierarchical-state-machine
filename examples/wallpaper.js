@@ -2,37 +2,45 @@ var StateMachine = require('../StateMachine');
 var Rx = require('rx');
 function NOOP() {}
 
+// [ ] TODO: privatize transition
+// [ ] TODO: fix eventHandlers to have EXPLICIT bubbling if you want it,
+//           and to stop at the first handler which doesn't re-fire
+// [ ] TODO: disallow top-level eventHandlers for child states
+// [ ] TODO: make it clearer that events are available to the entire FSM hierarchy (rename?)
+// [ ] TODO: make it clearer wtf transientProperties are (rename?)
+// [ ] TODO: remove allowSelfTransitions entirely
+
 /**
  * State machine for the Hero Image Rotator.
  */
 var heroImageRotator = new StateMachine({
     onUncaughtException: logError,
+    onExit: function() { console.log('HeroImageRotator: exiting'); },
     start: 'idle',
     events: ['stop', 'rotate', 'wait'],
-    allowSelfTransitions: true,
-    transitions: [
-        { event: 'stop', to: 'idle' },
-        { event: 'rotate', to: 'active' }
-    ],
     transientProperties: [
         'imageSources',
         'idxCurrentImage',
         'areImagesLoaded',
         'rotationInterval'
     ],
+    transitions: [
+        { event: 'stop', to: 'idle' },
+        { event: 'rotate', to: 'active' },
+        { event: 'rotate', from: 'active', to: 'active' }
+    ],
     states: {
-        'idle': { onEnter: activateIfNecessary },
+        'idle': { onEnter: onEnterIdle },
         'active': {
             start: 'loading',
             events: ['loaded', 'doneWaiting'],
-            allowSelfTransitions: true,
             transitions: [
                 { event: 'wait', from: 'rotating', to: 'waiting' },
                 { event: 'wait', from: 'waiting', to: 'waiting' },
                 { event: 'loaded', from: 'loading', to: 'rotating' },
                 { event: 'doneWaiting', from: 'waiting', to: 'rotating' },
             ],
-            onEnter: updateImagesAndStartRotating,
+            onEnter: onEnterActive,
             states: {
                 'loading': { onEnter: loadImages },
                 'rotating': { onEnter: rotateImages },
@@ -46,10 +54,11 @@ var heroImageRotator = new StateMachine({
  * Log a thrown exception to stderr
  *
  * @param {State} heroImageRotator
- * @param {?} error
+ * @param {?} event
  */
-function logError(heroImageRotator, error) {
-    console.error('ERROR:', error);
+function logError(heroImageRotator, event) {
+    console.error('ERROR:', event.error);
+    event.stopPropagation();
 }
 
 /**
@@ -59,7 +68,7 @@ function logError(heroImageRotator, error) {
  * @param [data]
  * @param [data.imageSources]
  */
-function activateIfNecessary(idleState, data) {
+function onEnterIdle(idleState, data) {
     console.log('HeroImageRotator: idle');
     if (data && typeof data === 'object' && 'imageSources' in data) {
         idleState.fireEvent('rotate', data);
@@ -74,7 +83,7 @@ function activateIfNecessary(idleState, data) {
  * @param {Object} [data]
  * @param {Object} [data.imageSources]
  */
-function updateImagesAndStartRotating(activeState, data) {
+function onEnterActive(activeState, data) {
     // take any new images
     if (data && typeof data === 'object' && 'imageSources' in data) {
         activeState.setProperty('areImagesLoaded', false);
