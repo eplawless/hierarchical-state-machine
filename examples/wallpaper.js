@@ -2,7 +2,7 @@ var StateMachine = require('../StateMachine');
 var Rx = require('rx');
 function NOOP() {}
 
-// [ ] TODO: privatize transition
+// [x] TODO: privatize transition
 // [x] TODO: fix eventHandlers to have EXPLICIT bubbling if you want it,
 //           and to stop at the first handler which doesn't re-fire
 // [x] TODO: disallow top-level eventHandlers for child states
@@ -30,7 +30,7 @@ var heroImageRotator = new StateMachine({
         { event: 'rotate', from: 'active', to: 'active' }
     ],
     states: {
-        'idle': { onEnter: onEnterIdle },
+        'idle': { onEnter: rotateIfWeHaveNewImages },
         'active': {
             start: 'loading',
             events: ['loaded', 'doneWaiting'],
@@ -40,7 +40,7 @@ var heroImageRotator = new StateMachine({
                 { event: 'loaded', from: 'loading', to: 'rotating' },
                 { event: 'doneWaiting', from: 'waiting', to: 'rotating' },
             ],
-            onEnter: onEnterActive,
+            onEnter: updateImagesAndStopIfWeHaveNone,
             states: {
                 'loading': { onEnter: loadImages },
                 'rotating': { onEnter: rotateImages },
@@ -68,7 +68,7 @@ function logError(heroImageRotator, event) {
  * @param [data]
  * @param [data.imageSources]
  */
-function onEnterIdle(idleState, data) {
+function rotateIfWeHaveNewImages(idleState, data) {
     console.log('HeroImageRotator: idle');
     if (data && typeof data === 'object' && 'imageSources' in data) {
         idleState.fireEvent('rotate', data);
@@ -83,7 +83,7 @@ function onEnterIdle(idleState, data) {
  * @param {Object} [data]
  * @param {Object} [data.imageSources]
  */
-function onEnterActive(activeState, data) {
+function updateImagesAndStopIfWeHaveNone(activeState, data) {
     // take any new images
     if (data && typeof data === 'object' && 'imageSources' in data) {
         activeState.setProperty('areImagesLoaded', false);

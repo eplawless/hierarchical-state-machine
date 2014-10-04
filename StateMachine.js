@@ -201,10 +201,13 @@ StateMachine.prototype = {
      * @return {Boolean}  Whether the event was handled.
      */
     _fireEvent: function(name, data) {
+        // let our current state handle this first
         var currentState = this._getCurrentState();
         if (currentState && currentState._fireEvent(name, data)) {
             return true;
         }
+
+        // fire event handlers before transitions
         var eventHandlers = this._props.eventHandlers;
         var eventHandler = eventHandlers && eventHandlers[name];
         if (typeof eventHandler === 'function') {
@@ -215,8 +218,11 @@ StateMachine.prototype = {
                 propagate: function() { isHandled = false; }
             };
             eventHandler(this, event);
-            if (isHandled) return true;
+            if (isHandled)
+                return true;
         }
+
+        // fire transitions
         var transition = this._transitionsByEvent[name];
         if (transition) {
             if (transition.parent && this.parent) {
@@ -226,7 +232,6 @@ StateMachine.prototype = {
                 this._transition(transition.to, data, transition.force);
                 return true;
             }
-            return false;
         }
         return false;
     },
