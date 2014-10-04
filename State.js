@@ -203,7 +203,7 @@ State.prototype = {
         var eventHandlers = this._props.eventHandlers;
         var eventHandler = eventHandlers && eventHandlers[name];
         if (typeof eventHandler === 'function') {
-            var event = new Event(data);
+            var event = new Event(name, data);
             eventHandler(this, event);
             if (event.isHandled)
                 return true;

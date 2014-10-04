@@ -1,4 +1,5 @@
-function Event(data) {
+function Event(name, data) {
+    this.name = name;
     this.data = data;
 }
 
