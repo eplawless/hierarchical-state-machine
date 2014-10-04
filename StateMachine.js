@@ -220,10 +220,10 @@ StateMachine.prototype = {
         var transition = this._transitionsByEvent[name];
         if (transition) {
             if (transition.parent && this.parent) {
-                this.parent.transition(transition.to, data, transition.force);
+                this.parent._transition(transition.to, data, transition.force);
                 return true;
             } else if (!transition.parent) {
-                this.transition(transition.to, data, transition.force);
+                this._transition(transition.to, data, transition.force);
                 return true;
             }
             return false;
@@ -329,9 +329,9 @@ StateMachine.prototype = {
 
         // allow before/on/afterEnter to transition us first
         if (this._hasQueuedExit || this._queuedTransitions.length) {
-            this.transition();
+            this._transition();
         } else {
-            this.transition(this._props.start, data);
+            this._transition(this._props.start, data);
         }
     },
 
@@ -397,7 +397,7 @@ StateMachine.prototype = {
         return nestedState;
     },
 
-    transition: function(stateName, data, forceTransition) {
+    _transition: function(stateName, data, forceTransition) {
         if (!this._entered) {
             return;
         }

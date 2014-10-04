@@ -3,12 +3,12 @@ var Rx = require('rx');
 function NOOP() {}
 
 // [ ] TODO: privatize transition
-// [ ] TODO: fix eventHandlers to have EXPLICIT bubbling if you want it,
+// [x] TODO: fix eventHandlers to have EXPLICIT bubbling if you want it,
 //           and to stop at the first handler which doesn't re-fire
-// [ ] TODO: disallow top-level eventHandlers for child states
+// [x] TODO: disallow top-level eventHandlers for child states
 // [ ] TODO: make it clearer that events are available to the entire FSM hierarchy (rename?)
 // [ ] TODO: make it clearer wtf transientProperties are (rename?)
-// [ ] TODO: remove allowSelfTransitions entirely
+// [x] TODO: remove allowSelfTransitions entirely
 
 /**
  * State machine for the Hero Image Rotator.

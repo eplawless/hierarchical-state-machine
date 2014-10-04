@@ -213,7 +213,7 @@ State.prototype = {
         }
         var transition = this._transitionsByEvent[name];
         if (transition && this.parent) {
-            this.parent.transition(transition.to, data, transition.force);
+            this.parent._transition(transition.to, data, transition.force);
             return true;
         }
         return false;

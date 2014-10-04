@@ -49,7 +49,6 @@ var playerUi = new StateMachine({
 function logPlayEvent(playerUi, event) {
     var video = event.data;
     console.log('got play event for video', video.id);
-    event.propagate();
 }
 
 /**

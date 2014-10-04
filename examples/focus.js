@@ -24,12 +24,6 @@ focusFsm.setBehavior({
     }
 });
 
-focusFsm.transitions
-    .takeUntil(focusFsm.exits)
-    .subscribe(function(transition) {
-        console.log(transition);
-    });
-
 focusFsm.enter();
 focusFsm.fireEvent('focus');
 focusFsm.fireEvent('focus');
