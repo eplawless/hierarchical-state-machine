@@ -15,7 +15,7 @@ function NOOP() {}
  */
 var heroImageRotator = new StateMachine({
     onUncaughtException: logError,
-    onExit: function() { console.log('HeroImageRotator: exiting'); },
+    onExit: printExiting,
     start: 'idle',
     events: ['stop', 'rotate', 'wait'],
     transientProperties: [
@@ -51,14 +51,20 @@ var heroImageRotator = new StateMachine({
 });
 
 /**
+ *
+ */
+function printExiting() {
+    console.log('HeroImageRotator: exiting');
+}
+
+/**
  * Log a thrown exception to stderr
  *
  * @param {State} heroImageRotator
  * @param {?} event
  */
-function logError(heroImageRotator, event) {
-    console.error('ERROR:', event.error);
-    event.stopPropagation();
+function logError(heroImageRotator, error) {
+    console.error('ERROR:', error);
 }
 
 /**

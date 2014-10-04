@@ -38,7 +38,7 @@ function StateMachine(props, behavior, parent) {
         throw new Error('StateMachine constructor requires properties object');
     }
 
-    this._props = props;
+    this._props = props || UNIT;
     this.setBehavior(behavior);
     this.parent = parent;
 
@@ -69,32 +69,31 @@ StateMachine.prototype = {
     _queuedEnterData: undefined,
     _queuedTransitions: null,
     _isTransitioning: false,
+    _propertyValuesByName: null,
 
     get isEntered() { return this._entered; },
 
     currentStateName: null,
 
     _onUncaughtException: function(error) {
-        var isHandled = false;
-        var event = {
-            error: error,
-            stopPropagation: function() { isHandled = true; }
-        };
-        var currentState = this;
-        while (currentState) {
-            var onUncaughtException = currentState._props.onUncaughtException;
-            if (typeof onUncaughtException === 'function') {
-                onUncaughtException(currentState, event);
-                if (isHandled)
-                    break;
-            }
-            currentState = currentState.parent;
-        }
         var ancestor = this;
-        while (ancestor && ancestor.parent) {
+        var oldestAncestor = this;
+        while (ancestor) {
+            var onUncaughtException = ancestor._props.onUncaughtException;
+            if (typeof onUncaughtException === 'function') {
+                onUncaughtException(ancestor, error);
+            }
+            ancestor._hasQueuedEnter = false;
+            ancestor._hasQueuedExit = false;
+            delete ancestor._queuedEnterData;
+            delete ancestor._queuedExitData;
+            ancestor._isTransitioning = false;
+            ancestor._queuedTransitions = [];
+            oldestAncestor = ancestor;
             ancestor = ancestor.parent;
         }
-        ancestor.exit(error);
+        oldestAncestor.exit(error);
+        throw error;
     },
 
     _createTransitionsByEvent: function(transitions) {
@@ -239,8 +238,9 @@ StateMachine.prototype = {
     _getAncestorWithEvent: function(name) {
         var ancestor = this;
         while (ancestor) {
-            var events = ancestor._props.events;
-            var privateEvents = ancestor._props.privateEvents;
+            var props = ancestor._props;
+            var events = props && props.events;
+            var privateEvents = props && props.privateEvents;
             if (Array.isArray(events) && events.indexOf(name) >= 0 ||
                 Array.isArray(privateEvents) && privateEvents.indexOf(name) >= 0) {
                 return ancestor;
@@ -369,27 +369,44 @@ StateMachine.prototype = {
         }
 
         this._entered = false; // we set this flag here so we can't transition on the way out
-        this._transitions && this._transitions.onNext({ from: this.currentStateName, to: null });
-        this._exitNestedState(
-            this.currentStateName,
-            this._props.states[this.currentStateName],
-            tryToGet(this._behavior.states, this.currentStateName),
-            data
-        );
+        var thrownError;
+        try {
+            this._transitions && this._transitions.onNext({ from: this.currentStateName, to: null });
+            this._exitNestedState(
+                this.currentStateName,
+                this._props.states[this.currentStateName],
+                tryToGet(this._behavior.states, this.currentStateName),
+                data
+            );
 
-        var beforeExit = this._behavior.beforeExit;
-        var onExit = this._props.onExit;
-        var afterExit = this._behavior.afterExit;
+            var beforeExit = this._behavior.beforeExit;
+            var onExit = this._props.onExit;
+            var afterExit = this._behavior.afterExit;
 
-        beforeExit && beforeExit.call(this, this, data);
-        onExit && onExit.call(this, this, data);
-        afterExit && afterExit.call(this, this, data);
-        this._exits && this._exits.onNext(data);
+            beforeExit && beforeExit.call(this, this, data);
+            onExit && onExit.call(this, this, data);
+            afterExit && afterExit.call(this, this, data);
+        } catch (error) {
+            thrownError = error;
+        }
+
+        this._propertyValuesByName = {};
+        this._activeStates = {};
+
+        try {
+            this._exits && this._exits.onNext(data);
+        } catch (error) {
+            thrownError = error;
+        }
 
         this._hasQueuedExit = false;
         delete this._queuedExitData;
         if (this._queuedTransitions) {
             this._queuedTransitions.length = 0;
+        }
+
+        if (thrownError) {
+            this._onUncaughtException(thrownError);
         }
     },
 
@@ -419,6 +436,7 @@ StateMachine.prototype = {
             this._queuedTransitions.push({ name: stateName, data: data, force: forceTransition });
         }
 
+        var thrownError;
         try {
             while (this._queuedTransitions.length) {
                 var lastStateName = this.currentStateName;
@@ -452,11 +470,15 @@ StateMachine.prototype = {
                     data
                 );
             }
-        } catch(e) {
-            this._onUncaughtException(e);
+        } catch (error) {
+            thrownError = error;
         }
 
         this._isTransitioning = false;
+
+        if (thrownError) {
+            this._onUncaughtException(thrownError);
+        }
 
         if (this._hasQueuedExit) {
             var data = this._queuedExitData;
@@ -524,7 +546,7 @@ StateMachine.prototype = {
         } else {
             return false;
         }
-    }
+    },
 
 };
 

@@ -222,8 +222,9 @@ State.prototype = {
     _getAncestorWithEvent: function(name) {
         var ancestor = this;
         while (ancestor) {
-            var events = ancestor._props.events;
-            var privateEvents = ancestor._props.privateEvents;
+            var props = ancestor._props;
+            var events = props && props.events;
+            var privateEvents = props && props.privateEvents;
             if (Array.isArray(events) && events.indexOf(name) >= 0 ||
                 Array.isArray(privateEvents) && privateEvents.indexOf(name) >= 0) {
                 return ancestor;
@@ -316,26 +317,20 @@ State.prototype = {
     },
 
     _onUncaughtException: function(error) {
-        var isHandled = false;
-        var event = {
-            error: error,
-            stopPropagation: function() { isHandled = true; }
-        };
-        var currentState = this;
-        while (currentState) {
-            var onUncaughtException = currentState._props.onUncaughtException;
-            if (typeof onUncaughtException === 'function') {
-                onUncaughtException(currentState, event);
-                if (isHandled)
-                    break;
-            }
-            currentState = currentState.parent;
-        }
         var ancestor = this;
-        while (ancestor && ancestor.parent) {
+        var oldestAncestor = this;
+        while (ancestor) {
+            var onUncaughtException = ancestor._props.onUncaughtException;
+            if (typeof onUncaughtException === 'function') {
+                onUncaughtException(ancestor, error);
+            }
+            ancestor._isTransitioning = false;
+            ancestor._queuedTransitions = [];
+            oldestAncestor = ancestor;
             ancestor = ancestor.parent;
         }
-        ancestor.exit(error);
+        oldestAncestor.exit(error);
+        throw error;
     },
 
 };

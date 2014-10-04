@@ -279,29 +279,7 @@ describe('State', function() {
             expect(State.prototype.fireEvent).toBeA(Function);
         })
 
-        it('attempts to get the named event stream and onNext data into it', function() {
-            var onNextSpy = sinon.spy();
-            var givenEventName;
-            var s  = new State({}, {}, {
-                getEvent: function(name) {
-                    givenEventName = name;
-                    return { onNext: onNextSpy };
-                }
-            });
-            s.enter();
-            var data = { x: 1 };
-            var result = s.fireEvent('lol', data);
-            expect(result).toBe(true);
-            expect(givenEventName).toBe('lol');
-            expect(onNextSpy.calledWith(data)).toBe(true);
-        })
-
-        it('returns false if it can\'t get the named event stream', function() {
-            var s = new State;
-            s.enter();
-            var result = s.fireEvent('lol');
-            expect(result).toBe(false);
-        })
+        // TODO: a lot more
 
     })
 

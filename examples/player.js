@@ -32,13 +32,13 @@ var playerUi = new StateMachine({
         },
         'playing': {
             transientProperties: ['currentVideo'],
+            onEnter: startHeartbeat,
             eventHandlers: { 'play': stopPlayingVideoThenPlayAgain },
-            onEnter: startHeartbeat
         },
         'stopping': {
             transientProperties: ['nextVideo'],
+            onEnter: stopVideo,
             eventHandlers: { 'play': setNextVideo },
-            onEnter: stopVideo
         }
     }
 });
@@ -234,8 +234,7 @@ function onNextEnter(state, callback) {
         .where(function(data) { return data.to === state; })
         .delay(0)
         .take(1)
-        .doAction(callback.bind(null, playerUi))
-        .subscribe(NOOP);
+        .subscribe(callback.bind(null, playerUi));
 }
 
 playerUi.enter();
