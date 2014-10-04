@@ -9,6 +9,7 @@ function NOOP() {}
 // [ ] TODO: make it clearer that events are available to the entire FSM hierarchy (rename?)
 // [ ] TODO: make it clearer wtf transientProperties are (rename?)
 // [x] TODO: remove allowSelfTransitions entirely
+// [ ] TODO: make all onExit/onEnters take transition info w/ data property && *from/to* properties
 
 /**
  * State machine for the Hero Image Rotator.
@@ -71,11 +72,13 @@ function logError(heroImageRotator, error) {
  * If we've got new images, activate, otherwise stay here.
  *
  * @para {State} idleState
- * @param [data]
- * @param [data.imageSources]
+ * @param [event]
+ * @param [event.data]
+ * @param [event.data.imageSources]
  */
-function rotateIfWeHaveNewImages(idleState, data) {
+function rotateIfWeHaveNewImages(idleState, event) {
     console.log('HeroImageRotator: idle');
+    var data = event.data;
     if (data && typeof data === 'object' && 'imageSources' in data) {
         idleState.fireEvent('rotate', data);
     }
@@ -89,8 +92,9 @@ function rotateIfWeHaveNewImages(idleState, data) {
  * @param {Object} [data]
  * @param {Object} [data.imageSources]
  */
-function updateImagesAndStopIfWeHaveNone(activeState, data) {
+function updateImagesAndStopIfWeHaveNone(activeState, event) {
     // take any new images
+    var data = event.data;
     if (data && typeof data === 'object' && 'imageSources' in data) {
         activeState.setProperty('areImagesLoaded', false);
         activeState.setProperty('imageSources', data.imageSources);
@@ -109,10 +113,12 @@ function updateImagesAndStopIfWeHaveNone(activeState, data) {
  * Pretends to load all of the image sources we've got.
  *
  * @param {State} loadingState
- * @param {Object} [data]
+ * @param {Object} [event]
+ * @param {Object} [event.data]
  */
-function loadImages(loadingState, data) {
+function loadImages(loadingState, event) {
     // skip the loading state if we've already loaded our images
+    var data = event.data;
     if (loadingState.getProperty('areImagesLoaded')) {
         loadingState.fireEvent('loaded', data);
         return;
@@ -142,10 +148,12 @@ function loadImages(loadingState, data) {
  * Starts rotating between the loaded images from the rotating state.
  *
  * @param {State} rotatingState
- * @param {Object} [data]
- * @param {Number} [data.interval] Interval between showing images
+ * @param {Object} [event]
+ * @param {Object} [event.data]
+ * @param {Number} [event.data.interval] Interval between showing images
  */
-function rotateImages(rotatingState, data) {
+function rotateImages(rotatingState, event) {
+    var data = event.data;
     console.log('HeroImageRotator: rotating');
 
     // show first image
@@ -179,11 +187,13 @@ function rotateImages(rotatingState, data) {
  * Positive duration waits here for the specified number of milliseconds.
  *
  * @param {State} waitingState
- * @param {Object} [data]
- * @param {Number} [data.duration]
+ * @param {Object} [event]
+ * @param {Object} [event.data]
+ * @param {Number} [event.data.duration]
  */
-function wait(waitingState, data) {
+function wait(waitingState, event) {
     // ignore negative or falsy durations
+    var data = event.data;
     if (!data || !data.duration || data.duration <= 0) {
         console.log('HeroImageRotator: no wait duration, skipping');
         waitingState.fireEvent('doneWaiting');

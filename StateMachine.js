@@ -1,4 +1,6 @@
 var tryToGet = require('./tryToGet');
+var ImmortalSubject = require('./ImmortalSubject');
+var TransitionInfo = require('./TransitionInfo');
 var Event = require('./Event');
 var State = require('./State');
 var UNIT = Object.freeze({});
@@ -180,17 +182,17 @@ StateMachine.prototype = {
     },
 
     get enters() {
-        if (!this._enters) { this._enters = new Event; }
+        if (!this._enters) { this._enters = new ImmortalSubject; }
         return this._enters;
     },
 
     get exits() {
-        if (!this._exits) { this._exits = new Event; }
+        if (!this._exits) { this._exits = new ImmortalSubject; }
         return this._exits;
     },
 
     get transitions() {
-        if (!this._transitions) { this._transitions = new Event; }
+        if (!this._transitions) { this._transitions = new ImmortalSubject; }
         return this._transitions;
     },
 
@@ -210,14 +212,9 @@ StateMachine.prototype = {
         var eventHandlers = this._props.eventHandlers;
         var eventHandler = eventHandlers && eventHandlers[name];
         if (typeof eventHandler === 'function') {
-            var isHandled = true;
-            var event = {
-                data: data,
-                isHandled: true,
-                propagate: function() { isHandled = false; }
-            };
+            var event = new Event(data);
             eventHandler(this, event);
-            if (isHandled)
+            if (event.isHandled)
                 return true;
         }
 
@@ -313,10 +310,18 @@ StateMachine.prototype = {
             }
         }
 
+        var event;
+        if (data instanceof TransitionInfo) {
+            event = data;
+            data = event.data;
+        } else {
+            event = new TransitionInfo(null, this._props.start, data);
+        }
+
         this._hasQueuedEnter = false;
         this._queuedEnterData = undefined;
         this._entered = true; // we set this flag here so we can transition more on the way in
-        this._enters && this._enters.onNext(data);
+        this._enters && this._enters.onNext(event);
         this._isTransitioning = true;
 
         var beforeEnter = this._behavior.beforeEnter;
@@ -324,9 +329,9 @@ StateMachine.prototype = {
         var afterEnter = this._behavior.afterEnter;
 
         try {
-            beforeEnter && beforeEnter.call(this, this, data);
-            onEnter && onEnter.call(this, this, data);
-            afterEnter && afterEnter.call(this, this, data);
+            beforeEnter && beforeEnter.call(this, this, event);
+            onEnter && onEnter.call(this, this, event);
+            afterEnter && afterEnter.call(this, this, event);
             this._isTransitioning = false;
         } catch (e) {
             this._onUncaughtException(e);
@@ -371,21 +376,29 @@ StateMachine.prototype = {
         this._entered = false; // we set this flag here so we can't transition on the way out
         var thrownError;
         try {
+
+            var event = data;
+            if (event instanceof TransitionInfo) {
+                data = event.data;
+            } else {
+                event = new TransitionInfo(this.currentStateName, null, data);
+            }
+
             this._transitions && this._transitions.onNext({ from: this.currentStateName, to: null });
             this._exitNestedState(
                 this.currentStateName,
                 this._props.states[this.currentStateName],
                 tryToGet(this._behavior.states, this.currentStateName),
-                data
+                event
             );
 
             var beforeExit = this._behavior.beforeExit;
             var onExit = this._props.onExit;
             var afterExit = this._behavior.afterExit;
 
-            beforeExit && beforeExit.call(this, this, data);
-            onExit && onExit.call(this, this, data);
-            afterExit && afterExit.call(this, this, data);
+            beforeExit && beforeExit.call(this, this, event);
+            onExit && onExit.call(this, this, event);
+            afterExit && afterExit.call(this, this, event);
         } catch (error) {
             thrownError = error;
         }
@@ -394,7 +407,7 @@ StateMachine.prototype = {
         this._activeStates = {};
 
         try {
-            this._exits && this._exits.onNext(data);
+            this._exits && this._exits.onNext(event);
         } catch (error) {
             thrownError = error;
         }
@@ -442,7 +455,16 @@ StateMachine.prototype = {
                 var lastStateName = this.currentStateName;
                 var queuedEnter = this._queuedTransitions.shift();
                 var nextStateName = queuedEnter.name;
+
+                var event;
                 var data = queuedEnter.data;
+                if (data instanceof TransitionInfo) {
+                    event = data;
+                    data = event.data;
+                } else {
+                    event = new TransitionInfo(lastStateName, nextStateName, data);
+                }
+
                 var forceTransition = queuedEnter.force;
                 var lastStateProps = props.states[lastStateName];
                 var nextStateProps = props.states[nextStateName];
@@ -454,20 +476,17 @@ StateMachine.prototype = {
                     lastStateName,
                     lastStateProps,
                     tryToGet(behavior, 'states', lastStateName),
-                    data
+                    event
                 );
 
-                this._transitions && this._transitions.onNext({
-                    from: lastStateName,
-                    to: nextStateName
-                });
+                this._transitions && this._transitions.onNext(event);
 
                 var nextStateBehavior = tryToGet(behavior, 'states', nextStateName);
                 this._enterNestedState(
                     nextStateName,
                     nextStateProps,
                     nextStateBehavior,
-                    data
+                    event
                 );
             }
         } catch (error) {

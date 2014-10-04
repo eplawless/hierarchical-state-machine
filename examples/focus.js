@@ -1,12 +1,5 @@
 var StateMachine = require('../StateMachine');
 
-function output(value) {
-    return function(state, event) {
-        console.log(value);
-        event && event.propagate();
-    }
-}
-
 var focusFsm = new StateMachine({
     start: 'blurred',
     states: ['focused', 'blurred'],
@@ -19,10 +12,18 @@ var focusFsm = new StateMachine({
 
 focusFsm.setBehavior({
     states: {
-        focused: { afterEnter: output('focused!') },
-        blurred: { afterEnter: output('blurred!') },
+        focused: { afterEnter: printEnteringState, beforeExit: printLeavingState },
+        blurred: { afterEnter: printEnteringState, beforeExit: printLeavingState },
     }
 });
+
+function printLeavingState(state, context) {
+    console.log('leaving', context.from);
+}
+
+function printEnteringState(state, context) {
+    console.log('entering', context.to);
+}
 
 focusFsm.enter();
 focusFsm.fireEvent('focus');

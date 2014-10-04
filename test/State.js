@@ -242,37 +242,6 @@ describe('State', function() {
 
     })
 
-    var getEventMethods = ['getEvent', 'getParentEvent'];
-
-    for (var idx in getEventMethods) {
-
-        var method = getEventMethods[idx];
-
-        describe('#'+method, function() {
-
-            it('is a method', function() {
-                expect(State.prototype[method]).toBeA(Function);
-            })
-
-            it('tries to return the result of its parent\'s getEvent method', function() {
-                var parent = {
-                    getEvent: function(name) { return { name: name }; }
-                };
-                var s = new State({}, {}, parent);
-                var event = s[method]('test');
-                expect(event).toBeA(Object);
-                expect(event.name).toBe('test');
-            })
-
-            it('returns undefined if it doesn\'t have a parent', function() {
-                var s = new State;
-                expect(s[method]('test')).toBe(undefined);
-            })
-
-        })
-
-    }
-
     describe('#fireEvent', function() {
 
         it('is a method', function() {

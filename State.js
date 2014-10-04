@@ -1,3 +1,4 @@
+var ImmortalSubject = require('./ImmortalSubject');
 var Event = require('./Event');
 var NOOP = function() {};
 var UNIT = Object.freeze({});
@@ -78,7 +79,7 @@ State.prototype = {
      * @type {Observable}
      */
     get enters() {
-        if (!this._enters) { this._enters = new Event; }
+        if (!this._enters) { this._enters = new ImmortalSubject; }
         return this._enters;
     },
 
@@ -87,7 +88,7 @@ State.prototype = {
      * @type {Observable}
      */
     get exits() {
-        if (!this._exits) { this._exits = new Event; }
+        if (!this._exits) { this._exits = new ImmortalSubject; }
         return this._exits;
     },
 
@@ -202,14 +203,10 @@ State.prototype = {
         var eventHandlers = this._props.eventHandlers;
         var eventHandler = eventHandlers && eventHandlers[name];
         if (typeof eventHandler === 'function') {
-            var isHandled = true;
-            var event = {
-                data: data,
-                isHandled: true,
-                propagate: function() { isHandled = false; }
-            };
+            var event = new Event(data);
             eventHandler(this, event);
-            if (isHandled) return true;
+            if (event.isHandled)
+                return true;
         }
         var transition = this._transitionsByEvent[name];
         if (transition && this.parent) {
@@ -249,18 +246,6 @@ State.prototype = {
         return false;
     },
 
-
-    /**
-     * Asks its parent StateMachine for a named event stream.
-     *
-     * @param {String} name
-     * @return {Event}
-     */
-    getParentEvent: function(name, scope) {
-        var parent = this.parent;
-        var getEvent = parent && parent.getEvent;
-        return getEvent && parent.getEvent(name, true);
-    },
 
     /**
      * Sets a mutable property on this State object.

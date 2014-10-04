@@ -1,15 +1,13 @@
-var Rx = require('rx');
-function NOOP() {}
-
-function Event(onError) {
-    Rx.Subject.apply(this);
+function Event(data) {
+    this.data = data;
 }
 
 Event.prototype = {
-    __proto__: Rx.Subject.prototype,
-    onCompleted: NOOP,
-    onError: NOOP
-};
+    __proto__: Event.prototype,
+    isHandled: true,
+    propagate: function() {
+        this.isHandled = false;
+    }
+}
 
 module.exports = Event;
-
