@@ -62,7 +62,7 @@ StateMachineHandle.prototype = {
  * @param {String}         props.start       The name of this state machine's initial state.
  * @param {Array|Object}   props.states      A list (or map) of state names (or configurations).
  * @param {Array}          [props.events]    A list of the names of event streams to create and expose.
- * @param {Array}          [props.privateEvents]    A list of the names of private event streams to create.
+ * @param {Array}          [props.internalEvents]    A list of the names of private event streams to create.
  *
  * @param {Array}          [props.transitions]            A list of transition description objects.
  * @param {String}         props.transitions[0].event     The name of the event which triggers this transition.
@@ -288,9 +288,9 @@ StateMachine.prototype = {
         while (ancestor) {
             var props = ancestor._props;
             var events = props && props.events;
-            var privateEvents = props && props.privateEvents;
+            var internalEvents = props && props.internalEvents;
             if (Array.isArray(events) && events.indexOf(name) >= 0 ||
-                !isPublicAccess && Array.isArray(privateEvents) && privateEvents.indexOf(name) >= 0) {
+                !isPublicAccess && Array.isArray(internalEvents) && internalEvents.indexOf(name) >= 0) {
                 return ancestor;
             }
             ancestor = ancestor.parent;

@@ -12,7 +12,7 @@ function interval(state, duration) {
 var playerUi = new StateMachine({
     start: 'idle',
     events: ['play', 'stop'],
-    privateEvents: ['playbackStarted', 'playbackStopped'],
+    internalEvents: ['playbackStarted', 'playbackStopped'],
     transientProperties: ['mixins', 'playerControl'],
     onUncaughtException: function(playerUi, error) {
         console.error('! ERROR:', error);
