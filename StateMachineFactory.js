@@ -1,13 +1,16 @@
 var StateMachine = require('./StateMachine');
 
-function StateMachineFactory(props) {
+function StateMachineFactory(props, behavior) {
     this._props = props;
+    this._behavior = behavior;
 }
 
 StateMachineFactory.prototype = {
     create: function(behavior, parent) {
-        var result = new StateMachine(this._props, behavior, parent);
-        return result;
+        return new StateMachine(
+            this._props,
+            behavior || this._behavior,
+            parent);
     }
 };
 

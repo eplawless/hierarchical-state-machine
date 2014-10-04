@@ -7,6 +7,55 @@ var UNIT = Object.freeze({});
 function NOOP() {}
 
 /**
+ * A reference to a state machine which enforces public/private and input/output
+ * conventions on event streams. Exposes the same interface as a state machine.
+ */
+function StateMachineHandle(stateMachine) {
+    this._stateMachine = stateMachine;
+}
+
+StateMachineHandle.prototype = {
+    __proto__: StateMachineHandle.prototype,
+
+    // properties
+    get isEntered() { return this._stateMachine.isEntered; },
+    get enters() { return this._stateMachine.enters; },
+    get exits() { return this._stateMachine.exits; },
+    get transitions() { return this._stateMachine.transitions; },
+    get currentStateName() { return this._stateMachine.currentStateName; },
+
+    // methods
+    setBehavior: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.setBehavior.apply(stateMachine, arguments);
+    },
+    fireEvent: function(name, data) {
+        var isPublic = true;
+        return this._stateMachine.fireEvent(name, data, isPublic);
+    },
+    enter: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.enter.apply(stateMachine, arguments);
+    },
+    exit: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.exit.apply(stateMachine, arguments);
+    },
+    getProperty: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.getProperty.apply(stateMachine, arguments);
+    },
+    setProperty: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.setProperty.apply(stateMachine, arguments);
+    },
+    hasProperty: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.hasProperty.apply(stateMachine, arguments);
+    },
+};
+
+/**
  * A hierarchical state machine (or state chart).
  *
  * @param {Object}         props             The core functionality of this state machine.
@@ -33,8 +82,9 @@ function NOOP() {}
  * @param {Object}         [behavior]     Provides additional hooks and functionality.
  *
  * @param {StateMachine}   [parent]     This state machine's parent state machine.
+ * @param {Boolean}        [returnRawStateMachine]     Whether we should skip creating a StateMachineHandle
  */
-function StateMachine(props, behavior, parent) {
+function StateMachine(props, behavior, parent, returnRawStateMachine) {
 
     if (!props || typeof props !== 'object') {
         throw new Error('StateMachine constructor requires properties object');
@@ -55,7 +105,8 @@ function StateMachine(props, behavior, parent) {
         throw new Error('StateMachine\'s initial state "' + this._props.start + '" doesn\'t exist');
 
     this._transitionsByEvent = this._createTransitionsByEvent(this._props.transitions);
-    this._onUncaughtException = this._onUncaughtException.bind(this);
+
+    return returnRawStateMachine ? this : new StateMachineHandle(this);
 }
 
 StateMachine.prototype = {
@@ -232,14 +283,14 @@ StateMachine.prototype = {
         return false;
     },
 
-    _getAncestorWithEvent: function(name) {
+    _getAncestorWithEvent: function(name, isPublicAccess) {
         var ancestor = this;
         while (ancestor) {
             var props = ancestor._props;
             var events = props && props.events;
             var privateEvents = props && props.privateEvents;
             if (Array.isArray(events) && events.indexOf(name) >= 0 ||
-                Array.isArray(privateEvents) && privateEvents.indexOf(name) >= 0) {
+                !isPublicAccess && Array.isArray(privateEvents) && privateEvents.indexOf(name) >= 0) {
                 return ancestor;
             }
             ancestor = ancestor.parent;
@@ -249,10 +300,11 @@ StateMachine.prototype = {
     /**
      * @param {String} name  The name of the event to fire.
      * @param {?} [data]  Optional data to pass into the event.
+     * @param {Boolean} [isPublicAccess]  whether we should be blocked from firing private events
      * @return {Boolean}  Whether the event was handled.
      */
-    fireEvent: function(name, data) {
-        var ancestor = this._getAncestorWithEvent(name);
+    fireEvent: function(name, data, isPublicAccess) {
+        var ancestor = this._getAncestorWithEvent(name, isPublicAccess);
         if (ancestor) {
             while (ancestor && ancestor.parent) {
                 ancestor = ancestor.parent;
@@ -352,7 +404,8 @@ StateMachine.prototype = {
         }
         // assume a start property means a state machine
         var Constructor = (stateProps && stateProps.start) ? StateMachine : State;
-        nestedState = new Constructor(stateProps, stateBehavior, this);
+        var returnRawStateMachine = true;
+        nestedState = new Constructor(stateProps, stateBehavior, this, returnRawStateMachine);
         this._activeStates[stateName] = nestedState;
         return nestedState;
     },

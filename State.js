@@ -216,14 +216,14 @@ State.prototype = {
         return false;
     },
 
-    _getAncestorWithEvent: function(name) {
+    _getAncestorWithEvent: function(name, isPublicAccess) {
         var ancestor = this;
         while (ancestor) {
             var props = ancestor._props;
             var events = props && props.events;
             var privateEvents = props && props.privateEvents;
             if (Array.isArray(events) && events.indexOf(name) >= 0 ||
-                Array.isArray(privateEvents) && privateEvents.indexOf(name) >= 0) {
+                !isPublicAccess && Array.isArray(privateEvents) && privateEvents.indexOf(name) >= 0) {
                 return ancestor;
             }
             ancestor = ancestor.parent;
@@ -233,10 +233,11 @@ State.prototype = {
     /**
      * @param {String} name  The name of the event to fire.
      * @param {?} [data]  Optional data to pass into the event.
+     * @param {Boolean} [isPublicAccess]  Whether we should hide private events.
      * @return {Boolean}  Whether the event was handled.
      */
-    fireEvent: function(name, data) {
-        var ancestor = this._getAncestorWithEvent(name);
+    fireEvent: function(name, data, isPublicAccess) {
+        var ancestor = this._getAncestorWithEvent(name, isPublicAccess);
         if (ancestor) {
             while (ancestor && ancestor.parent) {
                 ancestor = ancestor.parent;

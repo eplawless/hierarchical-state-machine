@@ -12,16 +12,30 @@ var focusFsm = new StateMachine({
 
 focusFsm.setBehavior({
     states: {
-        focused: { afterEnter: printEnteringState, beforeExit: printLeavingState },
-        blurred: { afterEnter: printEnteringState, beforeExit: printLeavingState },
+        focused: {
+            afterEnter: printEntering,
+            beforeExit: printLeaving
+        },
+        blurred: {
+            afterEnter: printEntering,
+            beforeExit: printLeaving
+        },
     }
 });
 
-function printLeavingState(state, context) {
+/**
+ * @param {State} state
+ * @param {TransitionInfo} context
+ */
+function printLeaving(state, context) {
     console.log('leaving', context.from);
 }
 
-function printEnteringState(state, context) {
+/**
+ * @param {State} state
+ * @param {TransitionInfo} context
+ */
+function printEntering(state, context) {
     console.log('entering', context.to);
 }
 

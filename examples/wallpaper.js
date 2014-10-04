@@ -9,7 +9,8 @@ function NOOP() {}
 // [ ] TODO: make it clearer that events are available to the entire FSM hierarchy (rename?)
 // [ ] TODO: make it clearer wtf transientProperties are (rename?)
 // [x] TODO: remove allowSelfTransitions entirely
-// [ ] TODO: make all onExit/onEnters take transition info w/ data property && *from/to* properties
+// [x] TODO: make all onExit/onEnters take transition info w/ data property && *from/to* properties
+// [x] TODO: actually enforce private events
 
 /**
  * State machine for the Hero Image Rotator.
