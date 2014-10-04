@@ -7,8 +7,8 @@ function NOOP() {}
  */
 var playerUiFsm = new StateMachine({
     start: 'idle',
-    inputEvents: ['stop'],
-    internalEvents: ['play', 'playbackStarted', 'playbackStopped'],
+    inputEvents: ['play', 'stop'],
+    internalEvents: ['playbackStarted', 'playbackStopped'],
     eventHandlers: { 'play': logUnhandledPlayEvent },
     transitions: [
         { event: 'play', from: 'idle', to: 'loading' },
