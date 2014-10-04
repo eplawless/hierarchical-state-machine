@@ -220,9 +220,9 @@ State.prototype = {
         var ancestor = this;
         while (ancestor) {
             var props = ancestor._props;
-            var events = props && props.events;
+            var inputEvents = props && props.inputEvents;
             var internalEvents = props && props.internalEvents;
-            if (Array.isArray(events) && events.indexOf(name) >= 0 ||
+            if (Array.isArray(inputEvents) && inputEvents.indexOf(name) >= 0 ||
                 !isPublicAccess && Array.isArray(internalEvents) && internalEvents.indexOf(name) >= 0) {
                 return ancestor;
             }

@@ -7,7 +7,7 @@ function output(value) { return function() { console.log(value); } }
 var abc = new StateMachine({
     start: 'a',
     states: ['a','b','c'],
-    events: ['next'],
+    inputEvents: ['next'],
     transitions: [
         { event: 'next', from: 'a', to: 'b' },
         { event: 'next', from: 'b', to: 'c' },

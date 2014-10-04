@@ -11,7 +11,7 @@ function interval(state, duration) {
 
 var playerUi = new StateMachine({
     start: 'idle',
-    events: ['play', 'stop'],
+    inputEvents: ['play', 'stop'],
     internalEvents: ['playbackStarted', 'playbackStopped'],
     transientProperties: ['mixins', 'playerControl'],
     onUncaughtException: function(playerUi, error) {
@@ -64,7 +64,7 @@ var playerUi = new StateMachine({
         },
         loading: {
             start: 'downloading',
-            events: ['downloadComplete', 'dataVerified'],
+            inputEvents: ['downloadComplete', 'dataVerified'],
             transitions: [
                 { event: 'downloadComplete', from: 'downloading', to: 'verifying' },
                 { event: 'dataVerified', from: 'verifying', to: 'starting' }

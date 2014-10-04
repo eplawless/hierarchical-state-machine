@@ -7,7 +7,7 @@ function NOOP() {}
  */
 var playerUiFsm = new StateMachine({
     start: 'idle',
-    events: ['stop'],
+    inputEvents: ['stop'],
     internalEvents: ['play', 'playbackStarted', 'playbackStopped'],
     eventHandlers: { 'play': logUnhandledPlayEvent },
     transitions: [
@@ -21,7 +21,7 @@ var playerUiFsm = new StateMachine({
         'idle': { onEnter: tryToLoadNextVideo },
         'loading': {
             start: 'downloading',
-            events: ['downloadComplete', 'dataVerified'],
+            inputEvents: ['downloadComplete', 'dataVerified'],
             eventHandlers: { 'play': stopLoadingThenPlay },
             transitions: [
                 { event: 'downloadComplete', from: 'downloading', to: 'verifying' },

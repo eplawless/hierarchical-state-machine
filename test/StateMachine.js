@@ -199,7 +199,7 @@ describe('StateMachine', function() {
             var fsm = new StateMachine({
                 start: 'state',
                 states: ['state'],
-                events: ['event'],
+                inputEvents: ['event'],
                 eventHandlers: { 'event': onEvent }
             });
 
@@ -223,7 +223,7 @@ describe('StateMachine', function() {
             });
 
             expect(function() { fsm.enter(); }).toThrow();
-            expect(fsm._entered).toBe(false);
+            expect(fsm.isEntered).toBe(false);
         })
 
         it('throws exceptions from the next state\'s onEnter method when transitioning', function() {
@@ -271,7 +271,7 @@ describe('StateMachine', function() {
         it('throws exceptions from a nested state\'s onEnter method on an event transition', function() {
             var fsm = new StateMachine({
                 start: 'a',
-                events: ['x'],
+                inputEvents: ['x'],
                 states: {
                     a: {
                         start: 'b',

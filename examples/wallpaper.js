@@ -19,7 +19,7 @@ var heroImageRotator = new StateMachine({
     onUncaughtException: logError,
     onExit: printExiting,
     start: 'idle',
-    events: ['stop', 'rotate', 'wait'],
+    inputEvents: ['stop', 'rotate', 'wait'],
     transientProperties: [
         'imageSources',
         'idxCurrentImage',
@@ -35,7 +35,7 @@ var heroImageRotator = new StateMachine({
         'idle': { onEnter: rotateIfWeHaveNewImages },
         'active': {
             start: 'loading',
-            events: ['loaded', 'doneWaiting'],
+            inputEvents: ['loaded', 'doneWaiting'],
             transitions: [
                 { event: 'wait', from: 'rotating', to: 'waiting' },
                 { event: 'wait', from: 'waiting', to: 'waiting' },

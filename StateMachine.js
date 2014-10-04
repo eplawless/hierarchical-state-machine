@@ -61,7 +61,7 @@ StateMachineHandle.prototype = {
  * @param {Object}         props             The core functionality of this state machine.
  * @param {String}         props.start       The name of this state machine's initial state.
  * @param {Array|Object}   props.states      A list (or map) of state names (or configurations).
- * @param {Array}          [props.events]    A list of the names of event streams to create and expose.
+ * @param {Array}          [props.inputEvents]    A list of the names of event streams to create and expose.
  * @param {Array}          [props.internalEvents]    A list of the names of private event streams to create.
  *
  * @param {Array}          [props.transitions]            A list of transition description objects.
@@ -287,9 +287,9 @@ StateMachine.prototype = {
         var ancestor = this;
         while (ancestor) {
             var props = ancestor._props;
-            var events = props && props.events;
+            var inputEvents = props && props.inputEvents;
             var internalEvents = props && props.internalEvents;
-            if (Array.isArray(events) && events.indexOf(name) >= 0 ||
+            if (Array.isArray(inputEvents) && inputEvents.indexOf(name) >= 0 ||
                 !isPublicAccess && Array.isArray(internalEvents) && internalEvents.indexOf(name) >= 0) {
                 return ancestor;
             }
@@ -315,12 +315,13 @@ StateMachine.prototype = {
     },
 
     _getValidEventsForErrorMessage: function() {
-        var events = this._props.events || [];
+        // TODO: internal events?
+        var inputEvents = this._props.inputEvents || [];
         var parent = this.parent;
         if (parent && parent._getValidEventsForErrorMessage) {
-            return events.concat(parent._getValidEventsForErrorMessage());
+            return inputEvents.concat(parent._getValidEventsForErrorMessage());
         } else {
-            return events;
+            return inputEvents;
         }
     },
 

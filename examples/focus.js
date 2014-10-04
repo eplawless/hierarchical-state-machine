@@ -3,7 +3,7 @@ var StateMachine = require('../StateMachine');
 var focusFsm = new StateMachine({
     start: 'blurred',
     states: ['focused', 'blurred'],
-    events: ['focus', 'blur'],
+    inputEvents: ['focus', 'blur'],
     transitions: [
         { event: 'focus', to: 'focused' },
         { event: 'blur', to: 'blurred' },
