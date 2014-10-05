@@ -71,10 +71,11 @@ StateMachineHandle.prototype = {
  * @param {Array}          [props.internalEvents]    A list of the names of valid internal events.
  * @param {Array}          [props.outputEvents]    A list of the names of output event streams to create.
  *
- * @param {Array}          [props.transitions]            A list of transition description objects.
- * @param {String}         props.transitions[0].event     The name of the event which triggers this transition.
- * @param {String}         props.transitions[0].to        The name of the state we're transitioning to.
- * @param {String}         [props.transitions[0].from]    The name of the state we're transitioning from.
+ * @param {Array}     [props.transitions]               A list of transition description objects.
+ * @param {String}    props.transitions[0].event        The name of the event which triggers this transition.
+ * @param {String}    props.transitions[0].to           The name of the state we're transitioning to.
+ * @param {String}    [props.transitions[0].from]       The name of the state we're transitioning from.
+ * @param {Function}  [props.transitions[0].predicate]  Returns whether we're allowed to transition.
  *
  * @param {Array}          [props.eventHandlers]             A map of event names to handlers.
  *
@@ -133,6 +134,7 @@ StateMachine.prototype = {
             var to = transition.to;
             var event = transition.event;
             var force = transition.force;
+            var predicate = transition.predicate;
             var isParentTransition = transition.parent;
             if (isParentTransition && !this.parent)
                 throw this._getMissingPropertyError('Transition', transition, 'parent');
@@ -149,6 +151,8 @@ StateMachine.prototype = {
                 throw this._getMissingPropertyError('Transition', transition, 'event');
             if (!self._getSelfOrAncestorWithEvent(event, false, false))
                 throw this._getInvalidPropertyError('Transition', transition, 'event');
+            if (predicate && typeof predicate !== 'function')
+                throw this._getInvalidPropertyError('Transition', transition, 'predicate');
 
             if (!isParentTransition && from) {
                 var fromStateProps = self._props.states[from];
@@ -159,10 +163,21 @@ StateMachine.prototype = {
                     throw this._getInvalidPropertyError('Transition', transition, 'states.'+from+'.transitions');
                 }
                 // put it on the front so it's overwritten by nested ones
-                fromStateTransitions.unshift({ event: event, to: to, force: true, parent: true });
+                fromStateTransitions.unshift({
+                    event: event,
+                    to: to,
+                    force: force,
+                    parent: true,
+                    predicate: predicate
+                });
                 fromStateProps.transitions = fromStateTransitions;
             } else {
-                result[event] = { to: to, force: force, parent: transition.parent };
+                result[event] = {
+                    to: to,
+                    force: force,
+                    parent: transition.parent,
+                    predicate: predicate
+                };
             }
         }
 
@@ -235,6 +250,12 @@ StateMachine.prototype = {
         // fire transitions
         var transition = this._transitionsByEvent[name];
         if (transition) {
+            if (transition.predicate) {
+                var predicate = transition.predicate;
+                if (!predicate.call(this, this, data)) {
+                    return false;
+                }
+            }
             if (transition.parent && this.parent) {
                 this.parent._transition(transition.to, data, transition.force);
                 return true;

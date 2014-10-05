@@ -67,6 +67,7 @@ State.prototype = {
             var to = transition.to;
             var event = transition.event;
             var force = transition.force;
+            var predicate = transition.predicate;
             var isParentTransition = transition.parent;
             if (isParentTransition && !this.parent)
                 throw this._getMissingPropertyError('Transition', transition, 'parent');
@@ -79,8 +80,10 @@ State.prototype = {
                 throw this._getMissingPropertyError('Transition', transition, 'event');
             if (!self._getSelfOrAncestorWithEvent(event))
                 throw this._getInvalidPropertyError('Transition', transition, 'event');
+            if (predicate && typeof predicate !== 'function')
+                throw this._getInvalidPropertyError('Transition', transition, 'predicate');
 
-            result[event] = { to: to, force: force };
+            result[event] = { to: to, force: force, predicate: predicate };
         }
 
         return result;
@@ -258,6 +261,12 @@ State.prototype = {
         // fire transitions
         var transition = this._transitionsByEvent[name];
         if (transition && this.parent) {
+            if (transition.predicate) {
+                var predicate = transition.predicate;
+                if (!predicate.call(this, this, data)) {
+                    return false;
+                }
+            }
             this.parent._transition(transition.to, data, transition.force);
             return true;
         }

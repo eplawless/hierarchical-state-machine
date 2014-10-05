@@ -334,5 +334,42 @@ describe('StateMachine', function() {
 
         })
 
+        describe('.transitions', function() {
+
+            it('can include a predicate function and won\'t transition if it returns falsy', function() {
+                var onEnter = sinon.spy();
+                var fsm = new StateMachine({
+                    start: 'a',
+                    inputEvents: ['next'],
+                    persistentData: ['dayOfTheWeek'],
+                    transitions: [
+                        { event: 'next', from: 'a', to: 'b', predicate: isTuesdayAndIsPolite }
+                    ],
+                    states: {
+                        'a': {},
+                        'b': { onEnter: onEnter }
+                    },
+                });
+
+                function isTuesdayAndIsPolite(fsm, data) {
+                    var dayOfTheWeek = fsm.getData('dayOfTheWeek');
+                    return dayOfTheWeek === 'tuesday' && data && data.please;
+                }
+
+                fsm.enter();
+                expect(fsm.currentStateName).toBe('a');
+                fsm.setData('dayOfTheWeek', 'monday');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('a');
+                fsm.setData('dayOfTheWeek', 'tuesday');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('a');
+                fsm.fireEvent('next', { please: true });
+                expect(fsm.currentStateName).toBe('b');
+            })
+
+        })
+
     })
+
 })
