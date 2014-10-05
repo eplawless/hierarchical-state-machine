@@ -93,6 +93,7 @@ function StateMachine(props, behavior, parent, returnRawStateMachine) {
         throw new Error('StateMachine constructor requires properties object');
     }
 
+    props.states = this._createStatesObject(props.states);
     State.call(this, props, behavior, parent);
 
     this._activeStates = {};
@@ -100,8 +101,6 @@ function StateMachine(props, behavior, parent, returnRawStateMachine) {
 
     if (typeof this._props.start !== 'string')
         throw new Error('StateMachine requires props.start to be a string');
-
-    this._props.states = this._createStatesObject(this._props.states);
 
     if (!this._props.states[this._props.start])
         throw new Error('StateMachine\'s initial state "' + this._props.start + '" doesn\'t exist');

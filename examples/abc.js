@@ -15,17 +15,17 @@ var abc = new StateMachine({
     ],
 });
 
-abc.setBehavior({
-    states: {
-        a: { afterEnter: output('entering a'), beforeExit: output('exiting a') },
-        b: { afterEnter: output('entering b'), beforeExit: output('exiting b') },
-        c: { afterEnter: output('entering c'), beforeExit: output('exiting c') },
-    }
-});
-
-abc.enter();
+abc.transitions
+    .takeUntil(abc.exits)
+    .subscribe(function(data) {
+        data && data.from && console.log('exiting', data.from);
+        data && data.to && console.log('entering', data.to);
+    });
 
 Rx.Observable.interval(1000)
     .subscribe(function() {
         abc.fireEvent('next');
     });
+
+abc.enter();
+
