@@ -6,7 +6,7 @@ function NOOP() {}
 // [x] TODO: fix eventHandlers to have EXPLICIT bubbling if you want it,
 //           and to stop at the first handler which doesn't re-fire
 // [x] TODO: disallow top-level eventHandlers for child states
-// [ ] TODO: make it clearer that events are available to the entire FSM hierarchy (rename?)
+// [x] TODO: make it clearer that events are available to the entire FSM hierarchy (rename?)
 // [x] TODO: make it clearer wtf transientProperties are (rename?)
 // [x] TODO: remove allowSelfTransitions entirely
 // [x] TODO: make all onExit/onEnters take transition info w/ data property && *from/to* properties
@@ -18,7 +18,6 @@ function NOOP() {}
 var heroImageRotator = new StateMachine({
     onUncaughtException: logError,
     onExit: printExiting,
-    start: 'idle',
     inputEvents: ['stop', 'rotate', 'wait'],
     transientData: [
         'imageSources',
@@ -26,10 +25,10 @@ var heroImageRotator = new StateMachine({
         'areImagesLoaded',
         'rotationInterval'
     ],
+    start: 'idle',
     transitions: [
         { event: 'stop', to: 'idle' },
         { event: 'rotate', to: 'active' },
-        { event: 'rotate', from: 'active', to: 'active' }
     ],
     states: {
         'idle': { onEnter: rotateIfWeHaveNewImages },
