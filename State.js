@@ -44,7 +44,7 @@ State.prototype = {
     _props: null,
     _behavior: null,
     _entered: false,
-    _propertyValuesByName: null,
+    _transientDataByName: null,
     _eventStreams: null,
     _transitionsByEvent: null,
 
@@ -333,14 +333,14 @@ State.prototype = {
      * @param {String} name
      * @param {?} value
      */
-    setProperty: function(name, value) {
-        var propertyNames = this._props.transientProperties;
+    setData: function(name, value) {
+        var propertyNames = this._props.transientData;
         if (Array.isArray(propertyNames) && propertyNames.indexOf(name) > -1) {
-            var propertyValuesByName = this._propertyValuesByName || {};
-            propertyValuesByName[name] = value;
-            this._propertyValuesByName = propertyValuesByName;
-        } else if (this.parent && typeof this.parent.setProperty === 'function') {
-            this.parent.setProperty(name, value);
+            var transientDataByName = this._transientDataByName || {};
+            transientDataByName[name] = value;
+            this._transientDataByName = transientDataByName;
+        } else if (this.parent && typeof this.parent.setData === 'function') {
+            this.parent.setData(name, value);
         } else {
             throw new Error("State Error: Can't set undeclared property: " + name);
         }
@@ -352,13 +352,13 @@ State.prototype = {
      * @param {String} name
      * @return {?} value
      */
-    getProperty: function(name) {
-        var propertyNames = this._props.transientProperties;
+    getData: function(name) {
+        var propertyNames = this._props.transientData;
         if (Array.isArray(propertyNames) && propertyNames.indexOf(name) > -1) {
-            var propertyValuesByName = this._propertyValuesByName;
-            return propertyValuesByName && propertyValuesByName[name];
-        } else if (this.parent && typeof this.parent.getProperty === 'function') {
-            return this.parent.getProperty(name);
+            var transientDataByName = this._transientDataByName;
+            return transientDataByName && transientDataByName[name];
+        } else if (this.parent && typeof this.parent.getData === 'function') {
+            return this.parent.getData(name);
         } else {
             throw new Error("State Error: Can't get undeclared property: " + name);
         }
@@ -370,12 +370,12 @@ State.prototype = {
      * @param {String} name
      * @return {Boolean}
      */
-    hasProperty: function(name) {
-        var propertyNames = this._props.transientProperties;
+    hasData: function(name) {
+        var propertyNames = this._props.transientData;
         if (Array.isArray(propertyNames) && propertyNames.indexOf(name) > -1) {
             return true;
-        } else if (this.parent && typeof this.parent.getProperty === 'function') {
-            return this.parent.hasProperty(name);
+        } else if (this.parent && typeof this.parent.getData === 'function') {
+            return this.parent.hasData(name);
         } else {
             return false;
         }

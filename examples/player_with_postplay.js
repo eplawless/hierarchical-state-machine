@@ -13,7 +13,7 @@ var playerUi = new StateMachine({
     start: 'idle',
     inputEvents: ['play', 'stop'],
     internalEvents: ['playbackStarted', 'playbackStopped'],
-    transientProperties: ['mixins', 'playerControl'],
+    transientData: ['mixins', 'playerControl'],
     onUncaughtException: function(playerUi, error) {
         console.error('! ERROR:', error);
         console.error('Shutting down player...');
@@ -33,7 +33,7 @@ var playerUi = new StateMachine({
         { state: 'playing', event: 'play', handler: function stopThenPlayAgain(playingState, nextVideo) {
             playingState.fireEvent('stop', {
                 storeBookmark: true,
-                stopping: playingState.getProperty('currentVideo'),
+                stopping: playingState.getData('currentVideo'),
                 next: nextVideo
             });
         } },
@@ -41,7 +41,7 @@ var playerUi = new StateMachine({
             loadingState.fireEvent('stop', { next: video });
         } },
         { state: 'stopping', event: 'play', handler: function setNextVideo(stoppingState, video) {
-            stoppingState.setProperty('nextVideo', video); // don't transition yet but schedule us to be next
+            stoppingState.setData('nextVideo', video); // don't transition yet but schedule us to be next
         } },
     ],
     states: {
@@ -107,12 +107,12 @@ var playerUi = new StateMachine({
             }
         },
         playing: {
-            transientProperties: ['currentVideo'],
+            transientData: ['currentVideo'],
             onEnter: function(playingState, video) {
-                playingState.setProperty('currentVideo', video);
+                playingState.setData('currentVideo', video);
 
-                var mixins = playingState.getProperty('mixins');
-                var playerControl = playingState.getProperty('playerControl');
+                var mixins = playingState.getData('mixins');
+                var playerControl = playingState.getData('playerControl');
 
                 // register mixins
                 mixins.forEach(function(mixin) {
@@ -134,16 +134,16 @@ var playerUi = new StateMachine({
                     .subscribe(function() {
                         playingState.fireEvent('stop', {
                             error: video.error,
-                            stopping: playingState.getProperty('currentVideo'),
+                            stopping: playingState.getData('currentVideo'),
                             storeBookmark: true
                         });
                     });
             }
         },
         stopping: {
-            transientProperties: ['nextVideo'],
+            transientData: ['nextVideo'],
             onEnter: function(stoppingState, stopEvent) {
-                stoppingState.setProperty('nextVideo', stopEvent.next);
+                stoppingState.setData('nextVideo', stopEvent.next);
 
                 var currentVideo = stopEvent.stopping;
                 console.log('stopping video', currentVideo.id);
@@ -156,7 +156,7 @@ var playerUi = new StateMachine({
                         }
                         stoppingState.fireEvent('playbackStopped', {
                             error: stopEvent.error,
-                            next: stoppingState.getProperty('nextVideo')
+                            next: stoppingState.getData('nextVideo')
                         });
                     });
             }
@@ -172,8 +172,8 @@ var postPlay = new StateMachine({
     },
     onEnter: function(postPlayState, playerUiData) {
         var state = playerUiData.state;
-        if (state.hasProperty('currentVideo')) {
-            var currentVideo = state.getProperty('currentVideo');
+        if (state.hasData('currentVideo')) {
+            var currentVideo = state.getData('currentVideo');
             if (currentVideo) {
                 console.log('postplay knows about video ' + currentVideo.id);
             }
@@ -195,8 +195,8 @@ var playerControl = {
     }
 };
 
-playerUi.setProperty('mixins', [postPlay]);
-playerUi.setProperty('playerControl', playerControl);
+playerUi.setData('mixins', [postPlay]);
+playerUi.setData('playerControl', playerControl);
 
 // [ ] TODO: debug mode showing all transitions (including nested)
 // [x] TODO: private vs public event scoping (use .toObservable)
@@ -213,7 +213,7 @@ playerUi.setProperty('playerControl', playerControl);
 // [ ] TODO: detect when my child StateMachine exits and start exiting too
 // [ ] TODO: add handler instead of to for transitions
 // [ ] TODO: deal with transitions during event handlers
-// [ ] TODO: require properties to be explicitly declared in the scope they have (call them transientProperties)
+// [ ] TODO: require properties to be explicitly declared in the scope they have (call them transientData)
 
 // HARD THINGS NEXT:
 // [x] Play event while loading

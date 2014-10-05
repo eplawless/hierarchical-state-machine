@@ -47,17 +47,17 @@ StateMachineHandle.prototype = {
         var stateMachine = this._stateMachine;
         return stateMachine.exit.apply(stateMachine, arguments);
     },
-    getProperty: function() {
+    getData: function() {
         var stateMachine = this._stateMachine;
-        return stateMachine.getProperty.apply(stateMachine, arguments);
+        return stateMachine.getData.apply(stateMachine, arguments);
     },
-    setProperty: function() {
+    setData: function() {
         var stateMachine = this._stateMachine;
-        return stateMachine.setProperty.apply(stateMachine, arguments);
+        return stateMachine.setData.apply(stateMachine, arguments);
     },
-    hasProperty: function() {
+    hasData: function() {
         var stateMachine = this._stateMachine;
-        return stateMachine.hasProperty.apply(stateMachine, arguments);
+        return stateMachine.hasData.apply(stateMachine, arguments);
     },
 };
 

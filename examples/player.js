@@ -35,12 +35,12 @@ var playerUiFsm = new StateMachine({
             }
         },
         'playing': {
-            transientProperties: ['currentVideo'],
+            transientData: ['currentVideo'],
             onEnter: startHeartbeat,
             eventHandlers: { 'play': stopPlayingVideoThenPlayAgain },
         },
         'stopping': {
-            transientProperties: ['nextVideo'],
+            transientData: ['nextVideo'],
             onEnter: stopVideo,
             eventHandlers: { 'play': setNextVideo },
         }
@@ -115,7 +115,7 @@ function stopPlayingVideoThenPlayAgain(playingState, playEvent) {
     var nextVideo = playEvent.data;
     playingState.fireEvent('stop', {
         storeBookmark: true,
-        stopping: playingState.getProperty('currentVideo'),
+        stopping: playingState.getData('currentVideo'),
         next: nextVideo
     });
 }
@@ -183,7 +183,7 @@ function startHeartbeat(playingState, context) {
         return;
     }
 
-    playingState.setProperty('currentVideo', video);
+    playingState.setData('currentVideo', video);
 
     // heartbeat
     interval(playingState, 1000)
@@ -197,7 +197,7 @@ function startHeartbeat(playingState, context) {
             var eventData = { storeBookmark: true };
             var error = video && video.error;
             if (error) eventData.error = error;
-            var currentVideo = playingState.getProperty('currentVideo');
+            var currentVideo = playingState.getData('currentVideo');
             if (currentVideo) eventData.stopping = currentVideo;
             playingState.fireEvent('stop', eventData);
         });
@@ -209,7 +209,7 @@ function startHeartbeat(playingState, context) {
  * @param {Object} [event.data]  the video we want to play next
  */
 function setNextVideo(stoppingState, event) {
-    stoppingState.setProperty('nextVideo', event.data); // don't transition yet but schedule us to be next
+    stoppingState.setData('nextVideo', event.data); // don't transition yet but schedule us to be next
 }
 
 /**
@@ -220,7 +220,7 @@ function setNextVideo(stoppingState, event) {
  */
 function stopVideo(stoppingState, context) {
     var data = context.data;
-    stoppingState.setProperty('nextVideo', data && data.next);
+    stoppingState.setData('nextVideo', data && data.next);
 
     var currentVideo = data && data.stopping;
     if (!currentVideo) {
@@ -241,7 +241,7 @@ function stopVideo(stoppingState, context) {
             }
             stoppingState.fireEvent('playbackStopped', {
                 error: data.error,
-                next: stoppingState.getProperty('nextVideo')
+                next: stoppingState.getData('nextVideo')
             });
         });
 }
@@ -254,21 +254,10 @@ function interval(state, duration) {
 }
 
 // [ ] TODO: debug mode showing all transitions (including nested)
-// [x] TODO: private vs public event scoping (use .toObservable)
-// [x] TODO: why did this.getEvent work ??!?! (exceptions being swallowed)
-// [ ] TODO: add readEvent and writeEvent instead
-// [ ] TODO: readEvent should no longer be a subject, should have a takeUntil
-// [ ] TODO: add predicate for transitions (both string and function-based)
-// [-] TODO: add functions for to property (selector) for transitions
-// [x] TODO: add eventHandlers
-// [ ] TODO: data transformations ???
-// [x] TODO: deal with properties like nextVideo and currentVideo
-// [x] TODO: exception safety (onUncaughtException ??? going down w/ no way to stop it)
-//   exits each state then calls its handler if any, handler can re-enter which cancels the bubbling
 // [ ] TODO: detect when my child StateMachine exits and start exiting too
 // [-] TODO: add handler instead of to for transitions
 // [ ] TODO: deal with transitions during event handlers
-// [x] TODO: require properties to be explicitly declared in the scope they have (call them transientProperties)
+// [x] TODO: require properties to be explicitly declared in the scope they have (call them transientData)
 
 // HARD THINGS NEXT:
 // [x] Play event while loading

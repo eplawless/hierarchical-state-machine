@@ -313,49 +313,49 @@ describe('State', function() {
 
     })
 
-    describe('#hasProperty', function() {
+    describe('#hasData', function() {
 
         it('is a method', function() {
-            expect(State.prototype.hasProperty).toBeA(Function);
+            expect(State.prototype.hasData).toBeA(Function);
         })
 
-        it('checks to see if a given name is in this state\'s transientProperties', function() {
+        it('checks to see if a given name is in this state\'s transientData', function() {
             var s = new State({
-                transientProperties: ['a']
+                transientData: ['a']
             });
-            expect(s.hasProperty('b')).toBe(false);
-            expect(s.hasProperty('a')).toBe(true);
+            expect(s.hasData('b')).toBe(false);
+            expect(s.hasData('a')).toBe(true);
         })
 
-        it('checks to see if a given name is in this state\'s transientProperties', function() {
+        it('checks to see if a given name is in this state\'s transientData', function() {
             var s = new State({
-                transientProperties: ['a']
+                transientData: ['a']
             });
-            expect(s.hasProperty('b')).toBe(false);
-            expect(s.hasProperty('a')).toBe(true);
+            expect(s.hasData('b')).toBe(false);
+            expect(s.hasData('a')).toBe(true);
         })
 
         it('checks up the parent state chain if it can\'t find a property', function() {
-            var parent = new State({ transientProperties: ['a'] });
+            var parent = new State({ transientData: ['a'] });
             var child = new State({}, {}, parent);
-            expect(child.hasProperty('a')).toBe(true);
-            expect(child.hasProperty('b')).toBe(false);
+            expect(child.hasData('a')).toBe(true);
+            expect(child.hasData('b')).toBe(false);
         })
 
     })
 
-    describe('#getProperty', function() {
+    describe('#getData', function() {
 
         it('is a method', function() {
-            expect(State.prototype.getProperty).toBeA(Function);
+            expect(State.prototype.getData).toBeA(Function);
         })
 
-        it('throws if the property is not declared in transientProperties (or its parent\'s)', function() {
+        it('throws if the property is not declared in transientData (or its parent\'s)', function() {
             var s = new State({
-                transientProperties: ['a']
+                transientData: ['a']
             });
-            expect(function() { s.getProperty('b') }).toThrow();
-            expect(function() { s.getProperty('a') }).toNotThrow();
+            expect(function() { s.getData('b') }).toThrow();
+            expect(function() { s.getData('a') }).toNotThrow();
         })
 
         it('gets a previously set property value')

@@ -7,7 +7,7 @@ function NOOP() {}
 //           and to stop at the first handler which doesn't re-fire
 // [x] TODO: disallow top-level eventHandlers for child states
 // [ ] TODO: make it clearer that events are available to the entire FSM hierarchy (rename?)
-// [ ] TODO: make it clearer wtf transientProperties are (rename?)
+// [ ] TODO: make it clearer wtf transientData are (rename?)
 // [x] TODO: remove allowSelfTransitions entirely
 // [x] TODO: make all onExit/onEnters take transition info w/ data property && *from/to* properties
 // [x] TODO: actually enforce private events
@@ -20,7 +20,7 @@ var heroImageRotator = new StateMachine({
     onExit: printExiting,
     start: 'idle',
     inputEvents: ['stop', 'rotate', 'wait'],
-    transientProperties: [
+    transientData: [
         'imageSources',
         'idxCurrentImage',
         'areImagesLoaded',
@@ -97,13 +97,13 @@ function updateImagesAndStopIfWeHaveNone(activeState, event) {
     // take any new images
     var data = event.data;
     if (data && typeof data === 'object' && 'imageSources' in data) {
-        activeState.setProperty('areImagesLoaded', false);
-        activeState.setProperty('imageSources', data.imageSources);
-        activeState.setProperty('idxCurrentImage', 0);
+        activeState.setData('areImagesLoaded', false);
+        activeState.setData('imageSources', data.imageSources);
+        activeState.setData('idxCurrentImage', 0);
     }
 
     // jump back to idle if we don't have any images
-    var imageSources = activeState.getProperty('imageSources');
+    var imageSources = activeState.getData('imageSources');
     if (!Array.isArray(imageSources) || imageSources.length === 0) {
         activeState.fireEvent('stop');
         return;
@@ -120,12 +120,12 @@ function updateImagesAndStopIfWeHaveNone(activeState, event) {
 function loadImages(loadingState, event) {
     // skip the loading state if we've already loaded our images
     var data = event.data;
-    if (loadingState.getProperty('areImagesLoaded')) {
+    if (loadingState.getData('areImagesLoaded')) {
         loadingState.fireEvent('loaded', data);
         return;
     }
 
-    var imageSources = loadingState.getProperty('imageSources');
+    var imageSources = loadingState.getData('imageSources');
     console.log('HeroImageRotator: loading', imageSources.length, 'images');
 
     // pretend to load all the images we have
@@ -139,7 +139,7 @@ function loadImages(loadingState, event) {
             },
             onCompleted: function() {
                 console.log('HeroImageRotator: Loaded all images');
-                loadingState.setProperty('areImagesLoaded', true);
+                loadingState.setData('areImagesLoaded', true);
                 loadingState.fireEvent('loaded', data);
             }
         });
@@ -158,24 +158,24 @@ function rotateImages(rotatingState, event) {
     console.log('HeroImageRotator: rotating');
 
     // show first image
-    var imageSources = rotatingState.getProperty('imageSources');
-    var idxCurrentImage = rotatingState.getProperty('idxCurrentImage');
+    var imageSources = rotatingState.getData('imageSources');
+    var idxCurrentImage = rotatingState.getData('idxCurrentImage');
     console.log('HeroImageRotator: showing image', imageSources[idxCurrentImage]);
 
     // show the other images on an interval
     if (data && typeof data === 'object' && 'interval' in data) {
-        rotatingState.setProperty('rotationInterval', data.interval);
+        rotatingState.setData('rotationInterval', data.interval);
     }
-    var interval = rotatingState.getProperty('rotationInterval') || 2000;
+    var interval = rotatingState.getData('rotationInterval') || 2000;
 
     Rx.Observable.interval(interval)
         .takeUntil(rotatingState.exits)
         .map(function() {
-            return rotatingState.getProperty('idxCurrentImage');
+            return rotatingState.getData('idxCurrentImage');
         })
         .subscribe(function(idxLast) {
             var idx = (idxLast + 1) % imageSources.length;
-            rotatingState.setProperty('idxCurrentImage', idx);
+            rotatingState.setData('idxCurrentImage', idx);
             console.log('HeroImageRotator: showing image', imageSources[idx]);
         });
 }
