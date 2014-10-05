@@ -147,7 +147,7 @@ StateMachine.prototype = {
                 throw this._getInvalidStateError('Transition', transition, to, 'to');
             if (!event)
                 throw this._getMissingPropertyError('Transition', transition, 'event');
-            if (!self._getAncestorWithEvent(event, false, false))
+            if (!self._getSelfOrAncestorWithEvent(event, false, false))
                 throw this._getInvalidPropertyError('Transition', transition, 'event');
 
             if (!isParentTransition && from) {
@@ -357,7 +357,7 @@ StateMachine.prototype = {
         try {
             this._exits && this._exits.onNext(event);
         } catch (error) {
-            thrownError = error;
+            thrownError = thrownError || error;
         }
 
         this._hasQueuedExit = false;

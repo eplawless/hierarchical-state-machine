@@ -9,22 +9,26 @@ var UNIT = Object.freeze({});
  * An individual state within a state machine.
  * Not necessarily intended for use standalone, but instead as part of a StateMachine.
  *
- * @param {Object}                [props]            The core functionality of this state.
- * @param {Function(State, [?])}   [props.canEnter]  If canEnter returns falsy we cancel an attempt to enter.
- * @param {Function(State, [?])}   [props.canExit]   If canExit returns falsy we cancel an attempt to exit.
- * @param {Function(State, [?])}   [props.onEnter]   Called when this state is entered.
- * @param {Function(State, [?])}   [props.onExit]    Called when this state is exited.
+ * @param {Object}     [props]           The core functionality of this state.
+ * @param {Function}   [props.canEnter]  If canEnter returns falsy we cancel an attempt to enter.
+ * @param {Function}   [props.canExit]   If canExit returns falsy we cancel an attempt to exit.
+ * @param {Function}   [props.onEnter]   Called when this state is entered.
+ * @param {Function}   [props.onExit]    Called when this state is exited.
  *
- * @param {Object}                [behavior]               Provides additional hooks and functionality.
- * @param {Function(State, [?])}   [behavior.beforeEnter]  Called just before props.onEnter.
- * @param {Function(State, [?])}   [behavior.afterEnter]   Called just after props.onEnter.
- * @param {Function(State, [?])}   [behavior.beforeExit]   Called just before props.onExit.
- * @param {Function(State, [?])}   [behavior.afterExit]    Called just after props.onExit.
+ * @param {Object}   [props.eventHandlers]   Called when this state is exited.
+ * @param {Array}    [props.inputEvents]     A list of valid input events to fire.
+ * @param {Array}    [props.outputEvents]    A list of valid output events to listen to.
+ * @param {Array}    [props.internalEvents]  A list of valid events for internal use.
+ *
+ * @param {Object}     [behavior]              Provides additional hooks and functionality.
+ * @param {Function}   [behavior.beforeEnter]  Called just before props.onEnter.
+ * @param {Function}   [behavior.afterEnter]   Called just after props.onEnter.
+ * @param {Function}   [behavior.beforeExit]   Called just before props.onExit.
+ * @param {Function}   [behavior.afterExit]    Called just after props.onExit.
  *
  * @param {StateMachine} [parent]  This state's parent state machine.
  */
 function State(props, behavior, parent) {
-
     this._setProps(props);
     this.setBehavior(behavior);
     this.parent = parent;
@@ -67,7 +71,7 @@ State.prototype = {
                 throw this._getMissingPropertyError('Transition', transition, 'to');
             if (!event)
                 throw this._getMissingPropertyError('Transition', transition, 'event');
-            if (!self._getAncestorWithEvent(event))
+            if (!self._getSelfOrAncestorWithEvent(event))
                 throw this._getInvalidPropertyError('Transition', transition, 'event');
 
             result[event] = { to: to, force: force };
@@ -259,21 +263,25 @@ State.prototype = {
      */
     fireEvent: function(name, data, isPublicAccess) {
         var isStreamAccess = false;
-        var ancestor = this._getAncestorWithEvent(name, isPublicAccess, isStreamAccess);
+        var ancestor = this._getSelfOrAncestorWithEvent(name, isPublicAccess, isStreamAccess);
         if (ancestor) {
-            // fire event streams first
-            var eventStream = ancestor._eventStreams && ancestor._eventStreams[name];
-            if (eventStream) {
-                eventStream.onNext(data);
-            }
+            try {
+                // fire event streams first
+                var eventStream = ancestor._eventStreams && ancestor._eventStreams[name];
+                if (eventStream) {
+                    eventStream.onNext(data);
+                }
 
-            // then fire event proper
-            return ancestor._fireEvent(name, data);
+                // then fire event proper
+                return ancestor._fireEvent(name, data);
+            } catch (error) {
+                this._onUncaughtException(error);
+            }
         }
         return false;
     },
 
-    _getAncestorWithEvent: function(name, isPublicAccess, isStreamAccess) {
+    _getSelfOrAncestorWithEvent: function(name, isPublicAccess, isStreamAccess) {
         var ancestor = this;
         while (ancestor) {
             var props = ancestor._props;
@@ -310,7 +318,7 @@ State.prototype = {
      */
     getEvents: function(name, isPublicAccess) {
         var isStreamAccess = true;
-        var ancestor = this._getAncestorWithEvent(name, isPublicAccess, isStreamAccess);
+        var ancestor = this._getSelfOrAncestorWithEvent(name, isPublicAccess, isStreamAccess);
         if (!ancestor) {
             throw new Error('Can\'t access event stream named ' + name);
         }
@@ -378,6 +386,7 @@ State.prototype = {
         var oldestAncestor = this;
         var context = new ErrorContext(error);
         while (ancestor) {
+            // TODO: remove knowledge of StateMachine, recursively call ancestors
             delete ancestor._hasQueuedEnter;
             delete ancestor._hasQueuedExit;
             delete ancestor._queuedEnterData;

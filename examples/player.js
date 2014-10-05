@@ -263,7 +263,7 @@ function interval(state, duration) {
 // [x] TODO: add eventHandlers
 // [ ] TODO: data transformations ???
 // [x] TODO: deal with properties like nextVideo and currentVideo
-// [ ] TODO: exception safety (onUncaughtException ??? going down w/ no way to stop it)
+// [x] TODO: exception safety (onUncaughtException ??? going down w/ no way to stop it)
 //   exits each state then calls its handler if any, handler can re-enter which cancels the bubbling
 // [ ] TODO: detect when my child StateMachine exits and start exiting too
 // [-] TODO: add handler instead of to for transitions
@@ -285,6 +285,11 @@ playerUiFsm.transitions
 playerUiFsm.getEvents('playbackStarted')
     .subscribe(function(video) {
         console.log('[EVENT] playbackStarted fired for video', video.id);
+    });
+
+playerUiFsm.getEvents('playbackStopped')
+    .subscribe(function() {
+        console.log('[EVENT] playbackStopped fired');
     });
 
 playerUiFsm.enter();
