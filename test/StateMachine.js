@@ -296,4 +296,43 @@ describe('StateMachine', function() {
 
     })
 
+    describe('props', function() {
+
+        describe('.persistentData', function() {
+
+            it('sticks around arbitrarily deep in hierarchies', function() {
+                var value = '';
+                var top = new StateMachine({
+                    start: 'middle',
+                    states: {
+                        'middle': {
+                            start: 'bottom',
+                            states: {
+                                'bottom': {
+                                    persistentData: ['count'],
+                                    onEnter: function(state) {
+                                        var count = state.getData('count') || 1;
+                                        value += count;
+                                        state.setData('count', count+1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                top.enter();
+                expect(value).toBe('1');
+                top.exit();
+                top.enter();
+                expect(value).toBe('12');
+                top.exit();
+                top.enter();
+                expect(value).toBe('123');
+
+            })
+
+        })
+
+    })
 })

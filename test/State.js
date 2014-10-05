@@ -370,4 +370,56 @@ describe('State', function() {
 
     })
 
+    describe('props', function() {
+
+        describe('.transientData', function() {
+
+            it('describes data which is cleared when the state exits', function() {
+                var value = "";
+                var state = new State({
+                    transientData: ['count'],
+                    onEnter: function(state) {
+                        var count = state.getData('count') || 1;
+                        value += count;
+                        state.setData('count', count+1);
+                    }
+                });
+                state.enter();
+                expect(value).toBe('1');
+                state.exit();
+                state.enter();
+                expect(value).toBe('11');
+                state.exit();
+                state.enter();
+                expect(value).toBe('111');
+            });
+
+        })
+
+        describe('.persistentData', function() {
+
+            it('describes data which sticks around even after the state exits', function() {
+                var value = "";
+                var state = new State({
+                    persistentData: ['count'],
+                    onEnter: function(state) {
+                        var count = state.getData('count') || 1;
+                        value += count;
+                        state.setData('count', count+1);
+                    }
+                });
+                state.enter();
+                expect(value).toBe('1');
+                state.exit();
+                state.enter();
+                expect(value).toBe('12');
+                state.exit();
+                state.enter();
+                expect(value).toBe('123');
+            });
+
+        })
+
+    })
+
 })

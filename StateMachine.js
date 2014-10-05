@@ -352,7 +352,14 @@ StateMachine.prototype = {
         }
 
         delete this._transientDataByName;
-        this._activeStates = {};
+
+        // garbage collect any states without persistent data
+        for (var stateName in this._activeStates) {
+            var state = this._activeStates[stateName];
+            if (!state._hasPersistentData()) {
+                delete this._activeStates[stateName];
+            }
+        }
 
         try {
             this._exits && this._exits.onNext(event);
@@ -461,6 +468,23 @@ StateMachine.prototype = {
             this._queuedEnterData = undefined;
             this.enter(data);
         }
+    },
+
+    /**
+     * Whether this state or any of its descendants have persistent data.
+     * @return {Boolean}
+     */
+    _hasPersistentData: function() {
+        if (State.prototype._hasPersistentData.call(this)) {
+            return true;
+        }
+        for (var stateName in this._activeStates) {
+            var state = this._activeStates[stateName];
+            if (state._hasPersistentData()) {
+                return true;
+            }
+        }
+        return false;
     },
 
 };

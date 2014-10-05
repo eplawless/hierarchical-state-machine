@@ -405,6 +405,15 @@ State.prototype = {
         return !!this._getSelfOrAncestorWithData(name);
     },
 
+    /**
+     * Whether this state has persistent data.
+     * @return {Boolean}
+     */
+    _hasPersistentData: function() {
+        var persistentData = this._props.persistentData;
+        return Array.isArray(persistentData) && persistentData.length > 0;
+    },
+
     _onUncaughtException: function(error) {
         var ancestor = this;
         var oldestAncestor = this;
