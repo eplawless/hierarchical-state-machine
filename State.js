@@ -20,6 +20,11 @@ var UNIT = Object.freeze({});
  * @param {Array}    [props.outputEvents]    A list of valid output events to listen to.
  * @param {Array}    [props.internalEvents]  A list of valid events for internal use.
  *
+ * @param {Array}    [props.transientData]   A list of mutable values you can store on this state.
+ *                                           Transient data are removed on exit.
+ * @param {Array}    [props.persistentData]  A list of mutable values you can store on this state.
+ *                                           Persistent data are *not* removed on exit.
+ *
  * @param {Object}     [behavior]              Provides additional hooks and functionality.
  * @param {Function}   [behavior.beforeEnter]  Called just before props.onEnter.
  * @param {Function}   [behavior.afterEnter]   Called just after props.onEnter.
@@ -45,6 +50,7 @@ State.prototype = {
     _behavior: null,
     _entered: false,
     _transientDataByName: null,
+    _persistentDataByName: null,
     _eventStreams: null,
     _transitionsByEvent: null,
 
@@ -193,11 +199,14 @@ State.prototype = {
             afterExit && afterExit(this, data);
             exits && exits.onNext(data);
             this._entered = false;
+            delete this._transientDataByName;
             return true;
         } catch (error) {
+            this._entered = false;
+            delete this._transientDataByName;
             this._onUncaughtException(error);
-            return false;
         }
+        return false;
     },
 
     /**
@@ -326,24 +335,50 @@ State.prototype = {
             .takeUntil(this.exits);
     },
 
+    _getSelfOrAncestorWithData: function(name) {
+        var ancestor = this;
+        while (ancestor) {
+            var transientDataNames = ancestor._props.transientData || UNIT_ARRAY;
+            var persistentDataNames = ancestor._props.persistentData || UNIT_ARRAY;
+            if (transientDataNames.indexOf(name) > -1 || persistentDataNames.indexOf(name) > -1) {
+                return ancestor;
+            }
+            ancestor = ancestor.parent;
+        }
+    },
+
+    _setData: function(name, value) {
+        var transientDataNames = this._props.transientData || UNIT_ARRAY;
+        if (transientDataNames.indexOf(name) > -1) {
+            var transientDataByName = this._transientDataByName || {};
+            transientDataByName[name] = value;
+            this._transientDataByName = transientDataByName;
+        } else { // must be persistent
+            var persistentDataByName = this._persistentDataByName || {};
+            persistentDataByName[name] = value;
+            this._persistentDataByName = persistentDataByName;
+        }
+    },
+
+    _getData: function(name) {
+        var transientDataByName = this._transientDataByName || UNIT;
+        var persistentDataByName = this._persistentDataByName || UNIT;
+        if (name in transientDataByName) return transientDataByName[name];
+        if (name in persistentDataByName) return persistentDataByName[name];
+    },
 
     /**
-     * Sets a mutable property on this State object.
+     * Sets  mutable property on this State object.
      *
      * @param {String} name
      * @param {?} value
      */
     setData: function(name, value) {
-        var propertyNames = this._props.transientData;
-        if (Array.isArray(propertyNames) && propertyNames.indexOf(name) > -1) {
-            var transientDataByName = this._transientDataByName || {};
-            transientDataByName[name] = value;
-            this._transientDataByName = transientDataByName;
-        } else if (this.parent && typeof this.parent.setData === 'function') {
-            this.parent.setData(name, value);
-        } else {
-            throw new Error("State Error: Can't set undeclared property: " + name);
+        var ancestor = this._getSelfOrAncestorWithData(name);
+        if (!ancestor) {
+            throw new Error("State Error: Can't set undeclared data: " + name);
         }
+        ancestor._setData(name, value);
     },
 
     /**
@@ -353,15 +388,11 @@ State.prototype = {
      * @return {?} value
      */
     getData: function(name) {
-        var propertyNames = this._props.transientData;
-        if (Array.isArray(propertyNames) && propertyNames.indexOf(name) > -1) {
-            var transientDataByName = this._transientDataByName;
-            return transientDataByName && transientDataByName[name];
-        } else if (this.parent && typeof this.parent.getData === 'function') {
-            return this.parent.getData(name);
-        } else {
-            throw new Error("State Error: Can't get undeclared property: " + name);
+        var ancestor = this._getSelfOrAncestorWithData(name);
+        if (!ancestor) {
+            throw new Error("State Error: Can't get undeclared data: " + name);
         }
+        return ancestor._getData(name);
     },
 
     /**
@@ -371,14 +402,7 @@ State.prototype = {
      * @return {Boolean}
      */
     hasData: function(name) {
-        var propertyNames = this._props.transientData;
-        if (Array.isArray(propertyNames) && propertyNames.indexOf(name) > -1) {
-            return true;
-        } else if (this.parent && typeof this.parent.getData === 'function') {
-            return this.parent.hasData(name);
-        } else {
-            return false;
-        }
+        return !!this._getSelfOrAncestorWithData(name);
     },
 
     _onUncaughtException: function(error) {

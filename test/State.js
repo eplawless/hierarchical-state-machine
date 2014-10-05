@@ -336,7 +336,9 @@ describe('State', function() {
         })
 
         it('checks up the parent state chain if it can\'t find a property', function() {
-            var parent = new State({ transientData: ['a'] });
+            var parent = new State({
+                transientData: ['a']
+            });
             var child = new State({}, {}, parent);
             expect(child.hasData('a')).toBe(true);
             expect(child.hasData('b')).toBe(false);
@@ -357,6 +359,12 @@ describe('State', function() {
             expect(function() { s.getData('b') }).toThrow();
             expect(function() { s.getData('a') }).toNotThrow();
         })
+
+        it('gets falsy values properly', function() {
+            var s = new State({ transientData: ['a'] });
+            s.setData('a', 0);
+            expect(s.getData('a')).toBe(0);
+        });
 
         it('gets a previously set property value')
 

@@ -7,7 +7,7 @@ function NOOP() {}
 //           and to stop at the first handler which doesn't re-fire
 // [x] TODO: disallow top-level eventHandlers for child states
 // [ ] TODO: make it clearer that events are available to the entire FSM hierarchy (rename?)
-// [ ] TODO: make it clearer wtf transientData are (rename?)
+// [x] TODO: make it clearer wtf transientProperties are (rename?)
 // [x] TODO: remove allowSelfTransitions entirely
 // [x] TODO: make all onExit/onEnters take transition info w/ data property && *from/to* properties
 // [x] TODO: actually enforce private events

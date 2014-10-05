@@ -351,7 +351,7 @@ StateMachine.prototype = {
             thrownError = error;
         }
 
-        this._propertyValuesByName = {};
+        delete this._transientDataByName;
         this._activeStates = {};
 
         try {
