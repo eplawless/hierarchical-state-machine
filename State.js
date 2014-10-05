@@ -1,4 +1,5 @@
 var ImmortalSubject = require('./ImmortalSubject');
+var ErrorContext = require('./ErrorContext');
 var Event = require('./Event');
 var NOOP = function() {};
 var UNIT = Object.freeze({});
@@ -305,13 +306,20 @@ State.prototype = {
     _onUncaughtException: function(error) {
         var ancestor = this;
         var oldestAncestor = this;
+        var context = new ErrorContext(error);
         while (ancestor) {
+            delete ancestor._hasQueuedEnter;
+            delete ancestor._hasQueuedExit;
+            delete ancestor._queuedEnterData;
+            delete ancestor._queuedExitData;
+            delete ancestor._isTransitioning;
+            delete ancestor._queuedTransitions;
             var onUncaughtException = ancestor._props.onUncaughtException;
             if (typeof onUncaughtException === 'function') {
-                onUncaughtException(ancestor, error);
+                onUncaughtException(ancestor, context);
+                if (context.isHandled)
+                    return;
             }
-            ancestor._isTransitioning = false;
-            ancestor._queuedTransitions = [];
             oldestAncestor = ancestor;
             ancestor = ancestor.parent;
         }

@@ -1,6 +1,7 @@
 var tryToGet = require('./tryToGet');
 var ImmortalSubject = require('./ImmortalSubject');
 var TransitionInfo = require('./TransitionInfo');
+var ErrorContext = require('./ErrorContext');
 var Event = require('./Event');
 var State = require('./State');
 var UNIT = Object.freeze({});
@@ -131,17 +132,20 @@ StateMachine.prototype = {
     _onUncaughtException: function(error) {
         var ancestor = this;
         var oldestAncestor = this;
+        var context = new ErrorContext(error);
         while (ancestor) {
-            var onUncaughtException = ancestor._props.onUncaughtException;
-            if (typeof onUncaughtException === 'function') {
-                onUncaughtException(ancestor, error);
-            }
-            ancestor._hasQueuedEnter = false;
-            ancestor._hasQueuedExit = false;
+            delete ancestor._hasQueuedEnter;
+            delete ancestor._hasQueuedExit;
             delete ancestor._queuedEnterData;
             delete ancestor._queuedExitData;
-            ancestor._isTransitioning = false;
-            ancestor._queuedTransitions = [];
+            delete ancestor._isTransitioning;
+            delete ancestor._queuedTransitions;
+            var onUncaughtException = ancestor._props.onUncaughtException;
+            if (typeof onUncaughtException === 'function') {
+                onUncaughtException(ancestor, context);
+                if (context.isHandled)
+                    return;
+            }
             oldestAncestor = ancestor;
             ancestor = ancestor.parent;
         }
@@ -391,7 +395,7 @@ StateMachine.prototype = {
         }
 
         // allow before/on/afterEnter to transition us first
-        if (this._hasQueuedExit || this._queuedTransitions.length) {
+        if (this._hasQueuedExit || this._queuedTransitions && this._queuedTransitions.length) {
             this._transition();
         } else {
             this._transition(this._props.start, data);
@@ -493,6 +497,7 @@ StateMachine.prototype = {
         var props = this._props;
         var behavior = this._behavior;
         if (this._isTransitioning && stateName) {
+            this._queuedTransitions = this._queuedTransitions || [];
             this._queuedTransitions.push({ name: stateName, data: data, force: forceTransition });
             return;
         }
@@ -500,12 +505,13 @@ StateMachine.prototype = {
         this._isTransitioning = true;
 
         if (stateName) {
+            this._queuedTransitions = this._queuedTransitions || [];
             this._queuedTransitions.push({ name: stateName, data: data, force: forceTransition });
         }
 
         var thrownError;
         try {
-            while (this._queuedTransitions.length) {
+            while (this._queuedTransitions && this._queuedTransitions.length) {
                 var lastStateName = this.currentStateName;
                 var queuedEnter = this._queuedTransitions.shift();
                 var nextStateName = queuedEnter.name;

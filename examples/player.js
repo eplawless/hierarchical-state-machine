@@ -7,6 +7,7 @@ function NOOP() {}
  */
 var playerUiFsm = new StateMachine({
     start: 'idle',
+    onUncaughtException: resetToIdle,
     inputEvents: ['play', 'stop'],
     internalEvents: ['playbackStarted', 'playbackStopped'],
     eventHandlers: { 'play': logUnhandledPlayEvent },
@@ -45,6 +46,16 @@ var playerUiFsm = new StateMachine({
         }
     }
 });
+
+/**
+ * On an uncaught exception, turn everything off and on again.
+ */
+function resetToIdle(player, context) {
+    context.stopPropagation();
+    console.log('[EXCEPTION]', context.error);
+    player.exit();
+    player.enter();
+}
 
 /**
  * Log any unhandled play event
