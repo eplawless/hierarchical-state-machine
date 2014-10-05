@@ -2,6 +2,7 @@ var ImmortalSubject = require('./ImmortalSubject');
 var ErrorContext = require('./ErrorContext');
 var Event = require('./Event');
 var NOOP = function() {};
+var UNIT_ARRAY = Object.freeze([]);
 var UNIT = Object.freeze({});
 
 /**
@@ -23,17 +24,27 @@ var UNIT = Object.freeze({});
  * @param {StateMachine} [parent]  This state's parent state machine.
  */
 function State(props, behavior, parent) {
-    this._props = props || UNIT;
-    this._behavior = behavior || UNIT;
-    this._entered = false;
-    this._properties = null;
+
+    this._setProps(props);
+    this.setBehavior(behavior);
     this.parent = parent;
+
+    this._eventStreams = {};
     this._transitionsByEvent = this._createTransitionsByEvent(this._props.transitions);
 }
 
 State.prototype = {
 
     __proto__: State.prototype, // for .constructor queries
+
+    _props: null,
+    _behavior: null,
+    _entered: false,
+    _propertyValuesByName: null,
+    _eventStreams: null,
+    _transitionsByEvent: null,
+
+    get isEntered() { return this._entered; },
 
     _createTransitionsByEvent: function(transitions) {
         var result = {};
@@ -73,6 +84,26 @@ State.prototype = {
     _getInvalidPropertyError: function(type, transition, propertyName) {
         return new Error("StateMachine Error: " + type + " " + JSON.stringify(transition) + "\n" +
             "  Invalid " + (propertyName ?"'"+propertyName+"' " : "") + "property.");
+    },
+
+    _setProps: function(props) {
+        if (!props) {
+            this._props = UNIT;
+        } else if (typeof props === 'object') {
+            this._props = props;
+        } else {
+            throw new Error('StateMachine requires props object');
+        }
+    },
+
+    setBehavior: function(behavior) {
+        if (!behavior) {
+            this._behavior = UNIT;
+        } else if (typeof behavior === 'object') {
+            this._behavior = behavior;
+        } else {
+            throw new Error('StateMachine requires behavior object');
+        }
     },
 
     /**
@@ -201,6 +232,7 @@ State.prototype = {
      * @return {Boolean}  Whether the event was handled.
      */
     _fireEvent: function(name, data) {
+        // fire event handlers before transitions
         var eventHandlers = this._props.eventHandlers;
         var eventHandler = eventHandlers && eventHandlers[name];
         if (typeof eventHandler === 'function') {
@@ -209,6 +241,8 @@ State.prototype = {
             if (event.isHandled)
                 return true;
         }
+
+        // fire transitions
         var transition = this._transitionsByEvent[name];
         if (transition && this.parent) {
             this.parent._transition(transition.to, data, transition.force);
@@ -217,14 +251,39 @@ State.prototype = {
         return false;
     },
 
-    _getAncestorWithEvent: function(name, isPublicAccess) {
+    /**
+     * @param {String} name  The name of the event to fire.
+     * @param {?} [data]  Optional data to pass into the event.
+     * @param {Boolean} [isPublicAccess]  whether we should be blocked from firing private events
+     * @return {Boolean}  Whether the event was handled.
+     */
+    fireEvent: function(name, data, isPublicAccess) {
+        var isStreamAccess = false;
+        var ancestor = this._getAncestorWithEvent(name, isPublicAccess, isStreamAccess);
+        if (ancestor) {
+            // fire event streams first
+            var eventStream = ancestor._eventStreams && ancestor._eventStreams[name];
+            if (eventStream) {
+                eventStream.onNext(data);
+            }
+
+            // then fire event proper
+            return ancestor._fireEvent(name, data);
+        }
+        return false;
+    },
+
+    _getAncestorWithEvent: function(name, isPublicAccess, isStreamAccess) {
         var ancestor = this;
         while (ancestor) {
             var props = ancestor._props;
-            var inputEvents = props && props.inputEvents;
-            var internalEvents = props && props.internalEvents;
-            if (Array.isArray(inputEvents) && inputEvents.indexOf(name) >= 0 ||
-                !isPublicAccess && Array.isArray(internalEvents) && internalEvents.indexOf(name) >= 0) {
+            var inputEvents = props && props.inputEvents || UNIT_ARRAY;
+            var internalEvents = props && props.internalEvents || UNIT_ARRAY;
+            var outputEvents = props && props.outputEvents || UNIT_ARRAY;
+            var hasInputEvent = (!isPublicAccess || !isStreamAccess) && inputEvents.indexOf(name) >= 0;
+            var hasInternalEvent = (!isPublicAccess) && internalEvents.indexOf(name) >= 0;
+            var hasOutputEvent = (!isPublicAccess || isStreamAccess) && outputEvents.indexOf(name) >= 0;
+            if (hasInputEvent || hasInternalEvent || hasOutputEvent) {
                 return ancestor;
             }
             ancestor = ancestor.parent;
@@ -232,20 +291,31 @@ State.prototype = {
     },
 
     /**
-     * @param {String} name  The name of the event to fire.
-     * @param {?} [data]  Optional data to pass into the event.
-     * @param {Boolean} [isPublicAccess]  Whether we should hide private events.
-     * @return {Boolean}  Whether the event was handled.
+     * @param {String} name
+     * @return {Observable}
      */
-    fireEvent: function(name, data, isPublicAccess) {
-        var ancestor = this._getAncestorWithEvent(name, isPublicAccess);
-        if (ancestor) {
-            while (ancestor && ancestor.parent) {
-                ancestor = ancestor.parent;
-            }
-            return ancestor._fireEvent(name, data);
+    _getEvents: function(name) {
+        var eventStream = this._eventStreams[name];
+        if (!eventStream) {
+            eventStream = new ImmortalSubject;
+            this._eventStreams[name] = eventStream;
         }
-        return false;
+        return eventStream;
+    },
+
+    /**
+     * @param {String} name
+     * @param {Boolean} isPublicAccess
+     * @return {Observable}
+     */
+    getEvents: function(name, isPublicAccess) {
+        var isStreamAccess = true;
+        var ancestor = this._getAncestorWithEvent(name, isPublicAccess, isStreamAccess);
+        if (!ancestor) {
+            throw new Error('Can\'t access event stream named ' + name);
+        }
+        return ancestor._getEvents(name)
+            .takeUntil(this.exits);
     },
 
 

@@ -9,7 +9,7 @@ var playerUiFsm = new StateMachine({
     start: 'idle',
     onUncaughtException: resetToIdle,
     inputEvents: ['play', 'stop'],
-    internalEvents: ['playbackStarted', 'playbackStopped'],
+    outputEvents: ['playbackStarted', 'playbackStopped'],
     eventHandlers: { 'play': logUnhandledPlayEvent },
     transitions: [
         { event: 'play', from: 'idle', to: 'loading' },
@@ -22,7 +22,7 @@ var playerUiFsm = new StateMachine({
         'idle': { onEnter: tryToLoadNextVideo },
         'loading': {
             start: 'downloading',
-            inputEvents: ['downloadComplete', 'dataVerified'],
+            internalEvents: ['downloadComplete', 'dataVerified'],
             eventHandlers: { 'play': stopLoadingThenPlay },
             transitions: [
                 { event: 'downloadComplete', from: 'downloading', to: 'verifying' },
@@ -282,6 +282,15 @@ playerUiFsm.transitions
         console.log('[TRANSITION]', info.from, '->', info.to, '(', info.data, ')');
     });
 
+playerUiFsm.getEvents('playbackStarted')
+    .subscribe(function(video) {
+        console.log('[EVENT] playbackStarted fired for video', video.id);
+    });
+
+playerUiFsm.enter();
+playerUiFsm.fireEvent('play', { id: 123 });
+onNextEnter('playing', interruptPlaying);
+
 function onNextEnter(state, callback) {
     playerUiFsm.transitions
         .where(function(data) { return data.to === state; })
@@ -289,10 +298,6 @@ function onNextEnter(state, callback) {
         .take(1)
         .subscribe(callback.bind(null, playerUiFsm));
 }
-
-playerUiFsm.enter();
-playerUiFsm.fireEvent('play', { id: 123 });
-onNextEnter('playing', interruptPlaying);
 
 function interruptPlaying() {
     console.log('~> interrupting playing!');
