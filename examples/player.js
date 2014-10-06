@@ -201,12 +201,11 @@ function startHeartbeat(playingState, context) {
     Rx.Observable.timer(3500)
         .takeUntil(playingState.exits)
         .doAction(function() {
-            var eventData = { storeBookmark: true };
-            var error = video && video.error;
-            if (error) eventData.error = error;
-            var currentVideo = playingState.getData('currentVideo');
-            if (currentVideo) eventData.stopping = currentVideo;
-            playingState.fireEvent('stop', eventData);
+            playingState.fireEvent('stop', {
+                storeBookmark: true,
+                error: video && video.error,
+                stopping: playingState.getData('currentVideo')
+            });
         })
         .subscribe(NOOP, playingState.onError);
 }
