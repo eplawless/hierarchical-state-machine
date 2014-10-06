@@ -368,7 +368,69 @@ describe('StateMachine', function() {
                 expect(fsm.currentStateName).toBe('b');
             })
 
-            it('uses the most specific, last to appear transition', function() {
+            it('allows multiple transitions which differ only by predicate', function() {
+
+                var fsm = new StateMachine({
+                    start: 'one',
+                    states: ['one', 'two'],
+                    inputEvents: ['next'],
+                    persistentData: ['day'],
+                    transitions: [
+                        { event: 'next', from: 'one', to: 'two', predicate: isMonday },
+                        { event: 'next', from: 'one', to: 'two', predicate: isTuesday },
+                    ]
+                });
+
+                function isMonday(state) {
+                    return state.getData('day') === 'monday';
+                }
+
+                function isTuesday(state) {
+                    return state.getData('day') === 'tuesday';
+                }
+
+                fsm.enter();
+                expect(fsm.currentStateName).toBe('one');
+                fsm.setData('day', 'monday');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('two');
+                fsm.exit();
+
+                fsm.enter();
+                expect(fsm.currentStateName).toBe('one');
+                fsm.setData('day', 'tuesday');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('two');
+
+            })
+
+            it('evaluates transitions with a from property before those without', function() {
+                var fsm = new StateMachine({
+                    start: 'one',
+                    states: ['one', 'two', 'three', 'four', 'five'],
+                    inputEvents: ['next'],
+                    transitions: [
+                        { event: 'next', to: 'two' },
+                        { event: 'next', from: 'one', to: 'three' },
+                        { event: 'next', to: 'four' },
+                        { event: 'next', from: 'one', to: 'five' },
+                        { event: 'next', from: 'two', to: 'one' }
+                    ]
+                });
+
+                fsm.enter();
+                expect(fsm.currentStateName).toBe('one');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('three');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('two');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('one');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('three');
+            })
+
+            it('evaluates transitions of equal specificity in the order they appear', function() {
                 var fsm = new StateMachine({
                     start: 'one',
                     states: ['one', 'two', 'three', 'four'],
@@ -383,7 +445,7 @@ describe('StateMachine', function() {
                 fsm.enter();
                 expect(fsm.currentStateName).toBe('one');
                 fsm.fireEvent('next');
-                expect(fsm.currentStateName).toBe('four');
+                expect(fsm.currentStateName).toBe('two');
             })
 
             it('does not allow self transitions by default if not provided a from: state', function() {

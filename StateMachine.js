@@ -121,7 +121,7 @@ StateMachine.prototype = {
 
     currentStateName: null,
 
-    _createTransitionsByEvent: function(transitions) {
+    _createListOfTransitionsByEvent: function(transitions) {
         var result = {};
         if (!Array.isArray(transitions)) {
             return result;
@@ -161,8 +161,7 @@ StateMachine.prototype = {
                 if (!Array.isArray(fromStateTransitions)) {
                     throw this._getInvalidPropertyError('Transition', transition, 'states.'+from+'.transitions');
                 }
-                // put it on the front so it's overwritten by nested ones
-                fromStateTransitions.unshift({
+                fromStateTransitions.push({
                     event: event,
                     to: to,
                     allowSelfTransition: true,
@@ -171,12 +170,14 @@ StateMachine.prototype = {
                 });
                 fromStateProps.transitions = fromStateTransitions;
             } else {
-                result[event] = {
+                var listOfTransitions = result[event] || [];
+                listOfTransitions.push({
                     to: to,
                     allowSelfTransition: allowSelfTransition,
                     parent: transition.parent,
                     predicate: predicate
-                };
+                });
+                result[event] = listOfTransitions;
             }
         }
 
@@ -247,12 +248,13 @@ StateMachine.prototype = {
         }
 
         // fire transitions
-        var transition = this._transitionsByEvent[name];
-        if (transition) {
+        var listOfTransitions = this._listOfTransitionsByEvent[name] || UNIT_ARRAY;
+        for (var idx = 0; idx < listOfTransitions.length; ++idx) {
+            var transition = listOfTransitions[idx];
             if (transition.predicate) {
                 var predicate = transition.predicate;
                 if (!predicate.call(this, this, data)) {
-                    return false;
+                    continue;
                 }
             }
             if (transition.parent && this.parent) {

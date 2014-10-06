@@ -44,7 +44,7 @@ function State(props, behavior, parent) {
     this.onError = this.onError.bind(this);
 
     this._eventStreams = {};
-    this._transitionsByEvent = this._createTransitionsByEvent(this._props.transitions);
+    this._listOfTransitionsByEvent = this._createListOfTransitionsByEvent(this._props.transitions);
 }
 
 State.prototype = {
@@ -57,11 +57,11 @@ State.prototype = {
     _transientDataByName: null,
     _persistentDataByName: null,
     _eventStreams: null,
-    _transitionsByEvent: null,
+    _listOfTransitionsByEvent: null,
 
     get isEntered() { return this._entered; },
 
-    _createTransitionsByEvent: function(transitions) {
+    _createListOfTransitionsByEvent: function(transitions) {
         var result = {};
         if (!Array.isArray(transitions)) {
             return result;
@@ -88,7 +88,13 @@ State.prototype = {
             if (predicate && typeof predicate !== 'function')
                 throw this._getInvalidPropertyError('Transition', transition, 'predicate');
 
-            result[event] = { to: to, allowSelfTransition: allowSelfTransition, predicate: predicate };
+            var listOfTransitions = result[event] || [];
+            listOfTransitions.push({
+                to: to,
+                allowSelfTransition: allowSelfTransition,
+                predicate: predicate
+            });
+            result[event] = listOfTransitions;
         }
 
         return result;
@@ -264,16 +270,19 @@ State.prototype = {
         }
 
         // fire transitions
-        var transition = this._transitionsByEvent[name];
-        if (transition && this.parent) {
-            if (transition.predicate) {
-                var predicate = transition.predicate;
-                if (!predicate.call(this, this, data)) {
-                    return false;
+        var listOfTransitions = this._listOfTransitionsByEvent[name] || UNIT_ARRAY;
+        for (var idx = 0; idx < listOfTransitions.length; ++idx) {
+            var transition = listOfTransitions[idx];
+            if (transition && this.parent) {
+                if (transition.predicate) {
+                    var predicate = transition.predicate;
+                    if (!predicate.call(this, this, data)) {
+                        continue;
+                    }
                 }
+                this.parent._transition(transition.to, data, transition.allowSelfTransition);
+                return true;
             }
-            this.parent._transition(transition.to, data, transition.allowSelfTransition);
-            return true;
         }
         return false;
     },
