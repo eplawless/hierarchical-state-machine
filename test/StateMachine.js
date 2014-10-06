@@ -210,6 +210,80 @@ describe('StateMachine', function() {
 
     })
 
+    describe('manually exiting a state', function() {
+
+        it('checks if we\'re currently exiting or transitioning, and if not, exits our parent', function() {
+            var fsm = new StateMachine({
+                start: 'state',
+                states: {
+                    'state': {
+                        onEnter: function(state) {
+                            state.getEvents('quit')
+                                .takeUntil(state.exits)
+                                .subscribe(function() {
+                                    state.exit();
+                                });
+                        }
+                    }
+                },
+                inputEvents: ['quit']
+            });
+
+            fsm.enter();
+            expect(fsm.isEntered).toBe(true);
+            fsm.fireEvent('quit');
+            expect(fsm.isEntered).toBe(false);
+        })
+
+        it('exits its parent if we tried to enter the state and it immediately exited', function() {
+            var fsm = new StateMachine({
+                start: 'one',
+                inputEvents: ['next'],
+                transitions: [{ event: 'next', to: 'two' }],
+                states: {
+                    'one': {},
+                    'two': {
+                        onEnter: function exit(state) {
+                            state.exit();
+                        }
+                    }
+                },
+            });
+
+            fsm.enter();
+            expect(fsm.isEntered).toBe(true);
+            fsm.fireEvent('next');
+            expect(fsm.isEntered).toBe(false);
+        })
+
+        it('exits all its ancestors if we tried to enter the state and it immediately exited', function() {
+            var called = false;
+            var fsm = new StateMachine({
+                start: 'one',
+                states: {
+                    'one': {
+                        start: 'two',
+                        states: {
+                            'two': {
+                                start: 'three',
+                                states: ['three'],
+                                onEnter: function exit(state) {
+                                    called = true;
+                                    state.exit();
+                                }
+                            }
+                        }
+                    }
+                },
+            });
+
+            fsm.enter();
+            expect(called).toBe(true);
+            expect(fsm.isEntered).toBe(false);
+        })
+
+    })
+
     describe('exception handling', function() {
 
         it('throws exceptions from its start state\'s onEnter method when entering', function() {

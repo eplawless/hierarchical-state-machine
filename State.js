@@ -214,6 +214,9 @@ State.prototype = {
             exits && exits.onNext(data);
             this._entered = false;
             delete this._transientDataByName;
+            if (this.parent && this.parent._entered && !this.parent._isTransitioning) {
+                this.parent.exit(data);
+            }
             return true;
         } catch (error) {
             this._entered = false;

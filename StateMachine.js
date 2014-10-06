@@ -475,6 +475,14 @@ StateMachine.prototype = {
                     nextStateBehavior,
                     event
                 );
+
+                var currentState = this._getCurrentState();
+                if (!currentState || !currentState.isEntered) {
+                    this._hasQueuedExit = true;
+                    if (this._queuedTransitions) {
+                        this._queuedTransitions.length = 0;
+                    }
+                }
             }
         } catch (error) {
             thrownError = error;
