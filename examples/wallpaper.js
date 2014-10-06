@@ -28,7 +28,7 @@ var heroImageRotator = new StateMachine({
     start: 'idle',
     transitions: [
         { event: 'stop', to: 'idle' },
-        { event: 'rotate', to: 'active' },
+        { event: 'rotate', to: 'active', allowSelfTransition: true },
     ],
     states: {
         'idle': { onEnter: rotateIfWeHaveNewImages },
