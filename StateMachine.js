@@ -10,28 +10,49 @@ function NOOP() {}
 /**
  * A hierarchical state machine (or state chart).
  *
- * @param {Object}         props             The core functionality of this state machine.
- * @param {String}         props.start       The name of this state machine's initial state.
- * @param {Array|Object}   props.states      A list (or map) of state names (or configurations).
- * @param {Array}          [props.inputEvents]    A list of the names of valid input events.
- * @param {Array}          [props.internalEvents]    A list of the names of valid internal events.
- * @param {Array}          [props.outputEvents]    A list of the names of output event streams to create.
+ * @param {Object}  props  The core functionality of this state machine.
+ * @param {String}  props.start  The name of this state machine's initial state.
+ * @param {Array|Object}  props.states  A list (or map) of state names (or configurations).
  *
- * @param {Array}     [props.transitions]               A list of transition description objects.
- * @param {String}    props.transitions[0].event        The name of the event which triggers this transition.
- * @param {String}    props.transitions[0].to           The name of the state we're transitioning to.
- * @param {String}    [props.transitions[0].from]       The name of the state we're transitioning from.
+ * @param {Function}  [props.canEnter]  If canEnter returns falsy we cancel an attempt to enter.
+ * @param {Function}  [props.canExit]  If canExit returns falsy we cancel an attempt to exit.
+ * @param {Function}  [props.onEnter]  Called when this state machine is entered.
+ * @param {Function}  [props.onExit]  Called when this state machine is exited.
+ *
+ * @param {Array}  [props.inputEvents]  A list of the names of valid input events.
+ * @param {Array}  [props.internalEvents]  A list of the names of valid internal events.
+ * @param {Array}  [props.outputEvents]  A list of the names of output event streams to create.
+ * @param {Object}  [props.eventHandlers]  A map of event names to handlers.
+ *
+ * @param {Array}  [props.transitions]  A list of transition description objects.
+ * @param {String}  props.transitions[0].event  The name of the event which triggers this transition.
+ * @param {String}  props.transitions[0].to  The name of the state we're transitioning to.
+ * @param {String}  [props.transitions[0].from]  The name of the state we're transitioning from.
  * @param {Function}  [props.transitions[0].predicate]  Returns whether we're allowed to transition.
+ * @param {Boolean}  [props.transitions[0].allowSelfTransition]
+ *  Whether this transition (without a 'from' property) can result in a self-transition on a state.
+ *  This means it would exit the current state and re-enter it.
  *
- * @param {Array}          [props.eventHandlers]             A map of event names to handlers.
+ * @param {Array}    [props.transientData]
+ *  A list of mutable values you can store on this state. Transient data are removed on exit.
+ * @param {Array}    [props.persistentData]
+ *  A list of mutable values you can store on this state. Persistent data are *not* removed on exit.
  *
- * @param {Function}       [props.onEnter]    Called when this state machine is entered.
- * @param {Function}       [props.onExit]     Called when this state machine is exited.
+ * @param {Function}  [props.onUncaughtException]
+ *  Called when an exception is caught by the state machine.
+ *  This callback takes two arguments: the state at the level it's declared, and an error event.
+ *  The error event provides a stopPropagation() method which tells the FSM you've successfully
+ *  dealt with the error and it doesn't need to continue. If nobody deals with the error, the
+ *  state machine will be exited and the error rethrown.
  *
- * @param {Object}         [behavior]     Provides additional hooks and functionality.
+ * @param {Object}  [behavior]  Provides additional hooks and functionality.
+ * @param {Function}  [behavior.beforeEnter]  Called just before props.onEnter.
+ * @param {Function}  [behavior.afterEnter]  Called just after props.onEnter.
+ * @param {Function}  [behavior.beforeExit]  Called just before props.onExit.
+ * @param {Function}  [behavior.afterExit]  Called just after props.onExit.
  *
- * @param {StateMachine}   [parent]     This state machine's parent state machine.
- * @param {Boolean}        [returnRawStateMachine]     Whether we should skip creating a StateMachineHandle
+ * @param {StateMachine}  [parent]  This state machine's parent state machine.
+ * @param {Boolean}  [returnRawStateMachine]  Whether we should skip creating a StateMachineHandle
  */
 function StateMachine(props, behavior, parent, returnRawStateMachine) {
 
