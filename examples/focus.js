@@ -1,3 +1,4 @@
+var Rx = require('rx');
 var StateMachine = require('../StateMachine');
 
 var focusFsm = new StateMachine({
@@ -12,14 +13,8 @@ var focusFsm = new StateMachine({
 
 focusFsm.setBehavior({
     states: {
-        focused: {
-            afterEnter: printEntering,
-            beforeExit: printLeaving
-        },
-        blurred: {
-            afterEnter: printEntering,
-            beforeExit: printLeaving
-        },
+        focused: { afterEnter: printEntering, beforeExit: printLeaving },
+        blurred: { afterEnter: printEntering, beforeExit: printLeaving },
     }
 });
 

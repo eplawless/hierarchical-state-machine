@@ -96,14 +96,14 @@ function StateMachine(props, behavior, parent, returnRawStateMachine) {
     props.states = this._createStatesObject(props.states);
     State.call(this, props, behavior, parent);
 
-    this._activeStates = {};
-    this._queuedTransitions = [];
-
     if (typeof this._props.start !== 'string')
         throw new Error('StateMachine requires props.start to be a string');
 
     if (!this._props.states[this._props.start])
         throw new Error('StateMachine\'s initial state "' + this._props.start + '" doesn\'t exist');
+
+    this._activeStates = {};
+    this._queuedTransitions = [];
 
     return returnRawStateMachine ? this : new StateMachineHandle(this);
 }
@@ -132,7 +132,7 @@ StateMachine.prototype = {
             var from = transition.from;
             var to = transition.to;
             var event = transition.event;
-            var force = transition.force;
+            var allowSelfTransition = transition.allowSelfTransition;
             var predicate = transition.predicate;
             var isParentTransition = transition.parent;
             if (isParentTransition && !this.parent)
@@ -165,7 +165,7 @@ StateMachine.prototype = {
                 fromStateTransitions.unshift({
                     event: event,
                     to: to,
-                    force: force,
+                    allowSelfTransition: true,
                     parent: true,
                     predicate: predicate
                 });
@@ -173,7 +173,7 @@ StateMachine.prototype = {
             } else {
                 result[event] = {
                     to: to,
-                    force: force,
+                    allowSelfTransition: allowSelfTransition,
                     parent: transition.parent,
                     predicate: predicate
                 };
@@ -256,10 +256,10 @@ StateMachine.prototype = {
                 }
             }
             if (transition.parent && this.parent) {
-                this.parent._transition(transition.to, data, transition.force);
+                this.parent._transition(transition.to, data, transition.allowSelfTransition);
                 return true;
             } else if (!transition.parent) {
-                this._transition(transition.to, data, transition.force);
+                this._transition(transition.to, data, transition.allowSelfTransition);
                 return true;
             }
         }
@@ -376,7 +376,7 @@ StateMachine.prototype = {
         // garbage collect any states without persistent data
         for (var stateName in this._activeStates) {
             var state = this._activeStates[stateName];
-            if (!state._hasPersistentData()) {
+            if (!state._hasPersistentState()) {
                 delete this._activeStates[stateName];
             }
         }
@@ -407,7 +407,7 @@ StateMachine.prototype = {
         return nestedState;
     },
 
-    _transition: function(stateName, data, forceTransition) {
+    _transition: function(stateName, data, allowSelfTransition) {
         if (!this._entered) {
             return;
         }
@@ -415,7 +415,11 @@ StateMachine.prototype = {
         var behavior = this._behavior;
         if (this._isTransitioning && stateName) {
             this._queuedTransitions = this._queuedTransitions || [];
-            this._queuedTransitions.push({ name: stateName, data: data, force: forceTransition });
+            this._queuedTransitions.push({
+                name: stateName,
+                data: data,
+                allowSelfTransition: allowSelfTransition
+            });
             return;
         }
 
@@ -423,7 +427,11 @@ StateMachine.prototype = {
 
         if (stateName) {
             this._queuedTransitions = this._queuedTransitions || [];
-            this._queuedTransitions.push({ name: stateName, data: data, force: forceTransition });
+            this._queuedTransitions.push({
+                name: stateName,
+                data: data,
+                allowSelfTransition: allowSelfTransition
+            });
         }
 
         var thrownError;
@@ -442,10 +450,10 @@ StateMachine.prototype = {
                     event = new TransitionInfo(lastStateName, nextStateName, data);
                 }
 
-                var forceTransition = queuedEnter.force;
+                var allowSelfTransition = queuedEnter.allowSelfTransition;
                 var lastStateProps = props.states[lastStateName];
                 var nextStateProps = props.states[nextStateName];
-                if (!nextStateProps || (lastStateName === nextStateName && !forceTransition)) {
+                if (!nextStateProps || (lastStateName === nextStateName && !allowSelfTransition)) {
                     continue;
                 }
 
@@ -494,13 +502,13 @@ StateMachine.prototype = {
      * Whether this state or any of its descendants have persistent data.
      * @return {Boolean}
      */
-    _hasPersistentData: function() {
-        if (State.prototype._hasPersistentData.call(this)) {
+    _hasPersistentState: function() {
+        if (State.prototype._hasPersistentState.call(this)) {
             return true;
         }
         for (var stateName in this._activeStates) {
             var state = this._activeStates[stateName];
-            if (state._hasPersistentData()) {
+            if (state._hasPersistentState()) {
                 return true;
             }
         }

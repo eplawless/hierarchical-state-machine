@@ -15,15 +15,18 @@ var UNIT = Object.freeze({});
  * @param {Function}   [props.onEnter]   Called when this state is entered.
  * @param {Function}   [props.onExit]    Called when this state is exited.
  *
- * @param {Object}   [props.eventHandlers]   Called when this state is exited.
- * @param {Array}    [props.inputEvents]     A list of valid input events to fire.
- * @param {Array}    [props.outputEvents]    A list of valid output events to listen to.
- * @param {Array}    [props.internalEvents]  A list of valid events for internal use.
+ * @param {Object}   [props.eventHandlers]   A map of event handlers functions by event name.
+ * @param {Array}    [props.inputEvents]     A list of valid input events one could fire.
+ * @param {Array}    [props.outputEvents]    A list of valid output events one could listen to.
+ * @param {Array}    [props.internalEvents]  A list of valid events for internal read/write use.
  *
- * @param {Array}    [props.transientData]   A list of mutable values you can store on this state.
- *                                           Transient data are removed on exit.
- * @param {Array}    [props.persistentData]  A list of mutable values you can store on this state.
- *                                           Persistent data are *not* removed on exit.
+ * @param {Array}    [props.transientData]
+ * A list of mutable values you can store on this state.
+ * Transient data are removed on exit.
+ *
+ * @param {Array}    [props.persistentData]
+ * A list of mutable values you can store on this state.
+ * Persistent data are *not* removed on exit.
  *
  * @param {Object}     [behavior]              Provides additional hooks and functionality.
  * @param {Function}   [behavior.beforeEnter]  Called just before props.onEnter.
@@ -37,6 +40,8 @@ function State(props, behavior, parent) {
     this._setProps(props);
     this.setBehavior(behavior);
     this.parent = parent;
+
+    this.onError = this.onError.bind(this);
 
     this._eventStreams = {};
     this._transitionsByEvent = this._createTransitionsByEvent(this._props.transitions);
@@ -66,7 +71,7 @@ State.prototype = {
             var transition = transitions[idx];
             var to = transition.to;
             var event = transition.event;
-            var force = transition.force;
+            var allowSelfTransition = transition.allowSelfTransition;
             var predicate = transition.predicate;
             var isParentTransition = transition.parent;
             if (isParentTransition && !this.parent)
@@ -83,7 +88,7 @@ State.prototype = {
             if (predicate && typeof predicate !== 'function')
                 throw this._getInvalidPropertyError('Transition', transition, 'predicate');
 
-            result[event] = { to: to, force: force, predicate: predicate };
+            result[event] = { to: to, allowSelfTransition: allowSelfTransition, predicate: predicate };
         }
 
         return result;
@@ -267,7 +272,7 @@ State.prototype = {
                     return false;
                 }
             }
-            this.parent._transition(transition.to, data, transition.force);
+            this.parent._transition(transition.to, data, transition.allowSelfTransition);
             return true;
         }
         return false;
@@ -415,10 +420,21 @@ State.prototype = {
     },
 
     /**
-     * Whether this state has persistent data.
+     * Fires the _onUncaughtException handlers, and if none of them stop the error
+     * event propagating, exits the whole FSM and throws the given error.
+     *
+     * @param {?} error
+     */
+    onError: function(error) {
+        this._onUncaughtException(error);
+    },
+
+    /**
+     * Whether this state has any internal data which needs to be persisted.
+     *
      * @return {Boolean}
      */
-    _hasPersistentData: function() {
+    _hasPersistentState: function() {
         var persistentData = this._props.persistentData;
         return Array.isArray(persistentData) && persistentData.length > 0;
     },

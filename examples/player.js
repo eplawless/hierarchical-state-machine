@@ -130,12 +130,14 @@ function downloadVideo(downloadingState, context) {
     console.log('downloading data for video ' + data.id + '...');
 
     // download data
-    timer(downloadingState, 500)
-        .subscribe(function downloadComplete() {
+    Rx.Observable.timer(500)
+        .takeUntil(downloadingState.exits)
+        .doAction(function downloadComplete() {
             console.log('download complete');
             data.percentDone = 90;
             downloadingState.fireEvent('downloadComplete', data);
-        });
+        })
+        .subscribe(NOOP, downloadingState.onError);
 }
 
 /**
@@ -162,11 +164,13 @@ function startPlayingVideo(startingState, context) {
     console.log('starting video ' + data.id + '...');
 
     // start playback
-    timer(startingState, 500)
-        .subscribe(function() {
+    Rx.Observable.timer(500)
+        .takeUntil(startingState.exits)
+        .doAction(function() {
             console.log('started playback for video', data.id);
             startingState.fireEvent('playbackStarted', data);
-        });
+        })
+        .subscribe(NOOP, startingState.onError);
 }
 
 /**
@@ -186,21 +190,25 @@ function startHeartbeat(playingState, context) {
     playingState.setData('currentVideo', video);
 
     // heartbeat
-    interval(playingState, 1000)
-        .subscribe(function() {
+    Rx.Observable.interval(1000)
+        .takeUntil(playingState.exits)
+        .doAction(function() {
             console.log('... still playing video', video.id);
-        });
+        })
+        .subscribe(NOOP, playingState.onError);
 
     // time out playback
-    timer(playingState, 3500)
-        .subscribe(function() {
+    Rx.Observable.timer(3500)
+        .takeUntil(playingState.exits)
+        .doAction(function() {
             var eventData = { storeBookmark: true };
             var error = video && video.error;
             if (error) eventData.error = error;
             var currentVideo = playingState.getData('currentVideo');
             if (currentVideo) eventData.stopping = currentVideo;
             playingState.fireEvent('stop', eventData);
-        });
+        })
+        .subscribe(NOOP, playingState.onError);
 }
 
 /**
@@ -234,8 +242,9 @@ function stopVideo(stoppingState, context) {
     console.log('stopping video', currentVideo.id);
 
     // stop video
-    timer(stoppingState, 500)
-        .subscribe(function() {
+    Rx.Observable.timer(500)
+        .takeUntil(stoppingState.exits)
+        .doAction(function() {
             if (data.storeBookmark) {
                 console.log('storing bookmark for video ' + currentVideo.id);
             }
@@ -243,14 +252,8 @@ function stopVideo(stoppingState, context) {
                 error: data.error,
                 next: stoppingState.getData('nextVideo')
             });
-        });
-}
-
-function timer(state, duration) {
-    return Rx.Observable.timer(duration).takeUntil(state.exits);
-}
-function interval(state, duration) {
-    return Rx.Observable.interval(duration).takeUntil(state.exits);
+        })
+        .subscribe(NOOP, stoppingState.onError);
 }
 
 // [ ] TODO: debug mode showing all transitions (including nested)

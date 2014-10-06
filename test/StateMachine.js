@@ -368,6 +368,88 @@ describe('StateMachine', function() {
                 expect(fsm.currentStateName).toBe('b');
             })
 
+            it('uses the most specific, last to appear transition', function() {
+                var fsm = new StateMachine({
+                    start: 'one',
+                    states: ['one', 'two', 'three', 'four'],
+                    inputEvents: ['next'],
+                    transitions: [
+                        { event: 'next', to: 'two' },
+                        { event: 'next', to: 'three' },
+                        { event: 'next', to: 'four' }
+                    ]
+                });
+
+                fsm.enter();
+                expect(fsm.currentStateName).toBe('one');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('four');
+            })
+
+            it('does not allow self transitions by default if not provided a from: state', function() {
+                var onExit = sinon.spy();
+                var fsm = new StateMachine({
+                    start: 'one',
+                    states: {
+                        'one': { onExit: onExit },
+                        'two': {}
+                    },
+                    inputEvents: ['next'],
+                    transitions: [
+                        { event: 'next', to: 'one' }
+                    ]
+                });
+
+                fsm.enter();
+                expect(fsm.currentStateName).toBe('one');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('one');
+                expect(onExit.called).toBe(false);
+            })
+
+            it('allows self transitions by default if provided a from: state', function() {
+                var onExit = sinon.spy();
+                var fsm = new StateMachine({
+                    start: 'one',
+                    states: {
+                        'one': { onExit: onExit },
+                        'two': {}
+                    },
+                    inputEvents: ['next'],
+                    transitions: [
+                        { event: 'next', from: 'one', to: 'one' }
+                    ]
+                });
+
+                fsm.enter();
+                expect(fsm.currentStateName).toBe('one');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('one');
+                expect(onExit.called).toBe(true);
+            })
+
+            it('allows self transitions if explicitly specified', function() {
+                var onExit = sinon.spy();
+                var fsm = new StateMachine({
+                    start: 'one',
+                    states: {
+                        'one': { onExit: onExit },
+                        'two': {}
+                    },
+                    inputEvents: ['next'],
+                    transitions: [
+                        { event: 'next', to: 'one', allowSelfTransition: true }
+                    ]
+                });
+
+                fsm.enter();
+                expect(fsm.currentStateName).toBe('one');
+                fsm.fireEvent('next');
+                expect(fsm.currentStateName).toBe('one');
+                expect(onExit.called).toBe(true);
+
+            })
+
         })
 
     })

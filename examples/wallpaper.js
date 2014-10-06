@@ -34,7 +34,7 @@ var heroImageRotator = new StateMachine({
         'idle': { onEnter: rotateIfWeHaveNewImages },
         'active': {
             start: 'loading',
-            inputEvents: ['loaded', 'doneWaiting'],
+            outputEvents: ['loaded', 'doneWaiting'],
             transitions: [
                 { event: 'wait', from: 'rotating', to: 'waiting' },
                 { event: 'wait', from: 'waiting', to: 'waiting' },
@@ -132,16 +132,14 @@ function loadImages(loadingState, event) {
         .takeUntil(loadingState.exits)
         .take(imageSources.length)
         .map(function(idx) { return imageSources[idx]; })
-        .subscribe({
-            onNext: function(source) {
-                console.log('HeroImageRotator: Loaded image', source);
-            },
-            onCompleted: function() {
-                console.log('HeroImageRotator: Loaded all images');
-                loadingState.setData('areImagesLoaded', true);
-                loadingState.fireEvent('loaded', data);
-            }
-        });
+        .doAction(function(source) {
+            console.log('HeroImageRotator: Loaded image', source);
+        }, NOOP, function() {
+            console.log('HeroImageRotator: Loaded all images');
+            loadingState.setData('areImagesLoaded', true);
+            loadingState.fireEvent('loaded', data);
+        })
+        .subscribe(NOOP, loadingState.onError);
 }
 
 /**
@@ -172,11 +170,12 @@ function rotateImages(rotatingState, event) {
         .map(function() {
             return rotatingState.getData('idxCurrentImage');
         })
-        .subscribe(function(idxLast) {
+        .doAction(function(idxLast) {
             var idx = (idxLast + 1) % imageSources.length;
             rotatingState.setData('idxCurrentImage', idx);
             console.log('HeroImageRotator: showing image', imageSources[idx]);
-        });
+        })
+        .subscribe(NOOP, rotatingState.onError);
 }
 
 /**
@@ -210,9 +209,10 @@ function wait(waitingState, event) {
     console.log('HeroImageRotator: waiting', data.duration, 'ms');
     Rx.Observable.timer(data.duration)
         .takeUntil(waitingState.exits)
-        .subscribe(function() {
+        .doAction(function() {
             waitingState.fireEvent('doneWaiting');
-        });
+        })
+        .subscribe(NOOP, waitingState.onError);
 }
 
 
