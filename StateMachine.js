@@ -69,7 +69,7 @@ function StateMachine(props, behavior, parent, returnRawStateMachine) {
     if (!this._props.states[this._props.start])
         throw new Error('StateMachine\'s initial state "' + this._props.start + '" doesn\'t exist');
 
-    this._activeStates = {};
+    this._childStates = {};
     this._queuedTransitions = [];
 
     return returnRawStateMachine ? this : new StateMachineHandle(this);
@@ -86,8 +86,20 @@ StateMachine.prototype = {
     _queuedTransitions: null,
     _isTransitioning: false,
 
+    /**
+     * The name of the currently active state.
+     * @type {String}
+     */
     currentStateName: null,
 
+    /**
+     * Builds out an internal map from events to arrays of transition descriptor objects.
+     * Takes transitions best dealt with by our child states and makes sure they get passed
+     * along to our child states' constructors.
+     *
+     * @param {Array} transitions
+     * @return {Object} map of events to lists of transition descriptor objects
+     */
     _createListOfTransitionsByEvent: function(transitions) {
         var result = {};
         if (!Array.isArray(transitions)) {
@@ -151,6 +163,14 @@ StateMachine.prototype = {
         return result;
     },
 
+    /**
+     * Takes any of the accepted formats for states (array of strings, array of state descriptor
+     * objects with 'name' properties, mixed array of both, or a map of state name to state descriptor)
+     * and normalizes them to a map of state name to state descriptor.
+     *
+     * @param {Array|Object} states
+     * @return {Object} states
+     */
     _createStatesObject: function(states) {
         if (!states || typeof states !== 'object') {
             throw new Error('StateMachine requires properties.states object');
@@ -171,11 +191,21 @@ StateMachine.prototype = {
         return result;
     },
 
+    /**
+     * Return the currently active state, if any.
+     *
+     * @return {State}
+     */
     _getCurrentState: function() {
-        var activeStates = this._activeStates;
-        return activeStates && activeStates[this.currentStateName];
+        var childStates = this._childStates;
+        return childStates && childStates[this.currentStateName];
     },
 
+    /**
+     * Get an observable of all state transitions.
+     *
+     * @return {Observable}
+     */
     get transitions() {
         if (!this._transitions) { this._transitions = new ImmortalSubject; }
         return this._transitions;
@@ -235,6 +265,11 @@ StateMachine.prototype = {
         return false;
     },
 
+    /**
+     * Enters this state and recursively enters its child states.
+     *
+     * @param {?} data  extra information to pass along to lifecycle methods (e.g. onEnter, onExit)
+     */
     enter: function(data) {
         if (this._entered) {
             if (!this._hasQueuedExit) {
@@ -281,23 +316,26 @@ StateMachine.prototype = {
         }
     },
 
-    _getOrCreateNestedState: function(stateName, stateProps, stateBehavior) {
-        var nestedState = this._activeStates[stateName];
-        if (nestedState) {
-            return nestedState;
+    /**
+     *
+     */
+    _getOrCreateChildState: function(stateName, stateProps, stateBehavior) {
+        var childState = this._childStates[stateName];
+        if (childState) {
+            return childState;
         }
         // assume a start property means a state machine
         var Constructor = (stateProps && stateProps.start) ? StateMachine : State;
         var returnRawStateMachine = true;
-        nestedState = new Constructor(stateProps, stateBehavior, this, returnRawStateMachine);
-        this._activeStates[stateName] = nestedState;
-        return nestedState;
+        childState = new Constructor(stateProps, stateBehavior, this, returnRawStateMachine);
+        this._childStates[stateName] = childState;
+        return childState;
     },
 
-    _enterNestedState: function(stateName, stateProps, stateBehavior, data) {
+    _enterChildState: function(stateName, stateProps, stateBehavior, data) {
         this.currentStateName = stateName;
-        var nestedState = this._getOrCreateNestedState(stateName, stateProps, stateBehavior);
-        nestedState.enter(data);
+        var childState = this._getOrCreateChildState(stateName, stateProps, stateBehavior);
+        childState.enter(data);
     },
 
     exit: function(data) {
@@ -323,7 +361,7 @@ StateMachine.prototype = {
 
             var behaviorStates = this._behavior.states;
             this._transitions && this._transitions.onNext({ from: this.currentStateName, to: null });
-            this._exitNestedState(
+            this._exitChildState(
                 this.currentStateName,
                 this._props.states[this.currentStateName],
                 behaviorStates && behaviorStates[this.currentStateName],
@@ -344,10 +382,10 @@ StateMachine.prototype = {
         delete this._transientDataByName;
 
         // garbage collect any states without persistent data
-        for (var stateName in this._activeStates) {
-            var state = this._activeStates[stateName];
+        for (var stateName in this._childStates) {
+            var state = this._childStates[stateName];
             if (!state._hasPersistentState()) {
-                delete this._activeStates[stateName];
+                delete this._childStates[stateName];
             }
         }
 
@@ -366,13 +404,13 @@ StateMachine.prototype = {
         }
     },
 
-    _exitNestedState: function(stateName, stateProps, stateBehavior, data) {
-        var nestedState = this._activeStates[stateName];
-        if (nestedState) {
-            nestedState.exit(data);
+    _exitChildState: function(stateName, stateProps, stateBehavior, data) {
+        var childState = this._childStates[stateName];
+        if (childState) {
+            childState.exit(data);
         }
         this.currentStateName = null;
-        return nestedState;
+        return childState;
     },
 
     _transition: function(stateName, data, allowSelfTransition) {
@@ -423,16 +461,17 @@ StateMachine.prototype = {
                     continue;
                 }
 
-                var lastNestedState = this._exitNestedState(
+                var lastChildState = this._exitChildState(
                     lastStateName,
                     lastStateProps,
                     behaviorStates && behaviorStates[lastStateName],
                     event
                 );
 
+                // TODO: fire before exiting?
                 this._transitions && this._transitions.onNext(event);
 
-                this._enterNestedState(
+                this._enterChildState(
                     nextStateName,
                     nextStateProps,
                     behaviorStates && behaviorStates[nextStateName],
@@ -470,15 +509,15 @@ StateMachine.prototype = {
     },
 
     /**
-     * Whether this state or any of its descendants have persistent data.
+     * Whether this state or any of its descendants have persistent state.
      * @return {Boolean}
      */
     _hasPersistentState: function() {
         if (State.prototype._hasPersistentState.call(this)) {
             return true;
         }
-        for (var stateName in this._activeStates) {
-            var state = this._activeStates[stateName];
+        for (var stateName in this._childStates) {
+            var state = this._childStates[stateName];
             if (state._hasPersistentState()) {
                 return true;
             }

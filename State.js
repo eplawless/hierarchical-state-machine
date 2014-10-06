@@ -21,12 +21,10 @@ var UNIT = Object.freeze({});
  * @param {Array}    [props.internalEvents]  A list of valid events for internal read/write use.
  *
  * @param {Array}    [props.transientData]
- * A list of mutable values you can store on this state.
- * Transient data are removed on exit.
+ *  A list of mutable values you can store on this state. Transient data are removed on exit.
  *
  * @param {Array}    [props.persistentData]
- * A list of mutable values you can store on this state.
- * Persistent data are *not* removed on exit.
+ *  A list of mutable values you can store on this state. Persistent data are *not* removed on exit.
  *
  * @param {Object}     [behavior]              Provides additional hooks and functionality.
  * @param {Function}   [behavior.beforeEnter]  Called just before props.onEnter.
