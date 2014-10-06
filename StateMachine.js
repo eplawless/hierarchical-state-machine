@@ -9,59 +9,6 @@ var UNIT_ARRAY = Object.freeze([]);
 function NOOP() {}
 
 /**
- * A reference to a state machine which enforces public/private and input/output
- * conventions on event streams. Exposes the same public interface as StateMachine.
- */
-function StateMachineHandle(stateMachine) {
-    this._stateMachine = stateMachine;
-}
-
-StateMachineHandle.prototype = {
-    __proto__: StateMachineHandle.prototype,
-
-    // properties
-    get isEntered() { return this._stateMachine.isEntered; },
-    get enters() { return this._stateMachine.enters; },
-    get exits() { return this._stateMachine.exits; },
-    get transitions() { return this._stateMachine.transitions; },
-    get currentStateName() { return this._stateMachine.currentStateName; },
-
-    // methods
-    setBehavior: function() {
-        var stateMachine = this._stateMachine;
-        return stateMachine.setBehavior.apply(stateMachine, arguments);
-    },
-    fireEvent: function(name, data) {
-        var isPublicAccess = true;
-        return this._stateMachine.fireEvent(name, data, isPublicAccess);
-    },
-    getEvents: function(name) {
-        var isPublicAccess = true;
-        return this._stateMachine.getEvents(name, isPublicAccess);
-    },
-    enter: function() {
-        var stateMachine = this._stateMachine;
-        return stateMachine.enter.apply(stateMachine, arguments);
-    },
-    exit: function() {
-        var stateMachine = this._stateMachine;
-        return stateMachine.exit.apply(stateMachine, arguments);
-    },
-    getData: function() {
-        var stateMachine = this._stateMachine;
-        return stateMachine.getData.apply(stateMachine, arguments);
-    },
-    setData: function() {
-        var stateMachine = this._stateMachine;
-        return stateMachine.setData.apply(stateMachine, arguments);
-    },
-    hasData: function() {
-        var stateMachine = this._stateMachine;
-        return stateMachine.hasData.apply(stateMachine, arguments);
-    },
-};
-
-/**
  * A hierarchical state machine (or state chart).
  *
  * @param {Object}         props             The core functionality of this state machine.
@@ -537,6 +484,60 @@ StateMachine.prototype = {
         delete this._queuedTransitions;
     },
 
+};
+
+/**
+ * A reference to a state machine which enforces public/private and input/output
+ * conventions on event streams. Exposes the same public interface as StateMachine.
+ */
+function StateMachineHandle(stateMachine) {
+    this._stateMachine = stateMachine;
+}
+
+StateMachineHandle.prototype = {
+
+    __proto__: StateMachineHandle.prototype, // for constructor queries
+
+    // properties
+    get isEntered() { return this._stateMachine.isEntered; },
+    get enters() { return this._stateMachine.enters; },
+    get exits() { return this._stateMachine.exits; },
+    get transitions() { return this._stateMachine.transitions; },
+    get currentStateName() { return this._stateMachine.currentStateName; },
+
+    // methods
+    setBehavior: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.setBehavior.apply(stateMachine, arguments);
+    },
+    fireEvent: function(name, data) {
+        var isPublicAccess = true;
+        return this._stateMachine.fireEvent(name, data, isPublicAccess);
+    },
+    getEvents: function(name) {
+        var isPublicAccess = true;
+        return this._stateMachine.getEvents(name, isPublicAccess);
+    },
+    enter: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.enter.apply(stateMachine, arguments);
+    },
+    exit: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.exit.apply(stateMachine, arguments);
+    },
+    getData: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.getData.apply(stateMachine, arguments);
+    },
+    setData: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.setData.apply(stateMachine, arguments);
+    },
+    hasData: function() {
+        var stateMachine = this._stateMachine;
+        return stateMachine.hasData.apply(stateMachine, arguments);
+    },
 };
 
 module.exports = StateMachine;
