@@ -274,7 +274,7 @@ StateMachine.prototype = {
         }
 
         // allow before/on/afterEnter to transition us first
-        if (this._hasQueuedExit || this._queuedTransitions && this._queuedTransitions.length) {
+        if (this._hasQueuedExit || this._queuedTransitions.length) {
             this._transition();
         } else {
             this._transition(this._props.start, data);
@@ -359,9 +359,7 @@ StateMachine.prototype = {
 
         this._hasQueuedExit = false;
         delete this._queuedExitData;
-        if (this._queuedTransitions) {
-            this._queuedTransitions.length = 0;
-        }
+        this._queuedTransitions.length = 0;
 
         if (thrownError) {
             this._onUncaughtException(thrownError);
@@ -384,7 +382,6 @@ StateMachine.prototype = {
         var props = this._props;
         var behaviorStates = this._behavior.states;
         if (this._isTransitioning && stateName) {
-            this._queuedTransitions = this._queuedTransitions || [];
             this._queuedTransitions.push({
                 name: stateName,
                 data: data,
@@ -396,7 +393,6 @@ StateMachine.prototype = {
         this._isTransitioning = true;
 
         if (stateName) {
-            this._queuedTransitions = this._queuedTransitions || [];
             this._queuedTransitions.push({
                 name: stateName,
                 data: data,
@@ -406,7 +402,7 @@ StateMachine.prototype = {
 
         var thrownError;
         try {
-            while (this._queuedTransitions && this._queuedTransitions.length) {
+            while (this._queuedTransitions.length) {
                 var lastStateName = this.currentStateName;
                 var queuedEnter = this._queuedTransitions.shift();
                 var nextStateName = queuedEnter.name;
@@ -446,9 +442,7 @@ StateMachine.prototype = {
                 var currentState = this._getCurrentState();
                 if (!currentState || !currentState.isEntered) {
                     this._hasQueuedExit = true;
-                    if (this._queuedTransitions) {
-                        this._queuedTransitions.length = 0;
-                    }
+                    this._queuedTransitions.length = 0;
                 }
             }
         } catch (error) {
@@ -501,7 +495,7 @@ StateMachine.prototype = {
         delete this._queuedEnterData;
         delete this._queuedExitData;
         delete this._isTransitioning;
-        delete this._queuedTransitions;
+        this._queuedTransitions.length = 0;
     },
 
 };
