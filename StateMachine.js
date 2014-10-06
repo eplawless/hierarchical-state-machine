@@ -1,4 +1,3 @@
-var tryToGet = require('./tryToGet');
 var ImmortalSubject = require('./ImmortalSubject');
 var TransitionInfo = require('./TransitionInfo');
 var ErrorContext = require('./ErrorContext');
@@ -301,11 +300,12 @@ StateMachine.prototype = {
                 event = new TransitionInfo(this.currentStateName, null, data);
             }
 
+            var behaviorStates = this._behavior.states;
             this._transitions && this._transitions.onNext({ from: this.currentStateName, to: null });
             this._exitNestedState(
                 this.currentStateName,
                 this._props.states[this.currentStateName],
-                tryToGet(this._behavior.states, this.currentStateName),
+                behaviorStates && behaviorStates[this.currentStateName],
                 event
             );
 
@@ -361,7 +361,7 @@ StateMachine.prototype = {
             return;
         }
         var props = this._props;
-        var behavior = this._behavior;
+        var behaviorStates = this._behavior.states;
         if (this._isTransitioning && stateName) {
             this._queuedTransitions = this._queuedTransitions || [];
             this._queuedTransitions.push({
@@ -409,17 +409,16 @@ StateMachine.prototype = {
                 var lastNestedState = this._exitNestedState(
                     lastStateName,
                     lastStateProps,
-                    tryToGet(behavior, 'states', lastStateName),
+                    behaviorStates && behaviorStates[lastStateName],
                     event
                 );
 
                 this._transitions && this._transitions.onNext(event);
 
-                var nextStateBehavior = tryToGet(behavior, 'states', nextStateName);
                 this._enterNestedState(
                     nextStateName,
                     nextStateProps,
-                    nextStateBehavior,
+                    behaviorStates && behaviorStates[nextStateName],
                     event
                 );
 
