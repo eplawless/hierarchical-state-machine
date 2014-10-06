@@ -429,6 +429,16 @@ State.prototype = {
     },
 
     /**
+     * Whether this state has any internal data which needs to be persisted.
+     *
+     * @return {Boolean}
+     */
+    _hasPersistentState: function() {
+        var persistentData = this._props.persistentData;
+        return Array.isArray(persistentData) && persistentData.length > 0;
+    },
+
+    /**
      * Fires the _onUncaughtException handlers, and if none of them stop the error
      * event propagating, exits the whole FSM and throws the given error.
      *
@@ -439,37 +449,39 @@ State.prototype = {
     },
 
     /**
-     * Whether this state has any internal data which needs to be persisted.
-     *
-     * @return {Boolean}
+     * Meant to be overridden; put ourselves into a place where we can deal with an exception.
      */
-    _hasPersistentState: function() {
-        var persistentData = this._props.persistentData;
-        return Array.isArray(persistentData) && persistentData.length > 0;
+    _cleanUpStateForUncaughtException: function() {
+        // empty
     },
 
-    _onUncaughtException: function(error) {
-        var ancestor = this;
-        var oldestAncestor = this;
-        var context = new ErrorContext(error);
-        while (ancestor) {
-            // TODO: remove knowledge of StateMachine, recursively call ancestors
-            delete ancestor._hasQueuedEnter;
-            delete ancestor._hasQueuedExit;
-            delete ancestor._queuedEnterData;
-            delete ancestor._queuedExitData;
-            delete ancestor._isTransitioning;
-            delete ancestor._queuedTransitions;
-            var onUncaughtException = ancestor._props.onUncaughtException;
-            if (typeof onUncaughtException === 'function') {
-                onUncaughtException(ancestor, context);
-                if (context.isHandled)
-                    return;
+    /**
+     * Fires the onUncaughtException handlers, and if none of them stop the error
+     * event propagating, exits the whole FSM and throws the given error.
+     *
+     * @param {?} error
+     */
+    _onUncaughtException: function(error, context) {
+        context = context || new ErrorContext(error);
+
+        this._cleanUpStateForUncaughtException();
+
+        // try to handle the exception
+        var onUncaughtException = this._props.onUncaughtException;
+        if (typeof onUncaughtException === 'function') {
+            onUncaughtException(this, context);
+            if (context.isHandled) {
+                return true;
             }
-            oldestAncestor = ancestor;
-            ancestor = ancestor.parent;
         }
-        oldestAncestor.exit(error);
+
+        // get our parent to try to handle it
+        if (this.parent && this.parent._onUncaughtException(error, context)) {
+            return true;
+        }
+
+        // give up
+        this.exit(error);
         throw error;
     },
 

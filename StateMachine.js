@@ -10,7 +10,7 @@ function NOOP() {}
 
 /**
  * A reference to a state machine which enforces public/private and input/output
- * conventions on event streams. Exposes the same interface as a state machine.
+ * conventions on event streams. Exposes the same public interface as StateMachine.
  */
 function StateMachineHandle(stateMachine) {
     this._stateMachine = stateMachine;
@@ -515,6 +515,18 @@ StateMachine.prototype = {
             }
         }
         return false;
+    },
+
+    /**
+     * @override State#_cleanUpStateForUncaughtException
+     */
+    _cleanUpStateForUncaughtException: function() {
+        delete this._hasQueuedEnter;
+        delete this._hasQueuedExit;
+        delete this._queuedEnterData;
+        delete this._queuedExitData;
+        delete this._isTransitioning;
+        delete this._queuedTransitions;
     },
 
 };

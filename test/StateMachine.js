@@ -216,8 +216,10 @@ describe('StateMachine', function() {
             var fsm = new StateMachine({
                 start: 'state',
                 states: {
-                    state: {
-                        onEnter: function() { throw new Error('foo'); }
+                    'state': {
+                        onEnter: function() {
+                            throw new Error('foo');
+                        }
                     }
                 }
             });
