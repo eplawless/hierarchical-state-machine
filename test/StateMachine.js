@@ -256,6 +256,38 @@ describe('StateMachine', function() {
             expect(fsm.isEntered).toBe(false);
         })
 
+        it('doesn\'t freak out when you subscribe to transitions inside a transitions onNext', function(done) {
+            var fsm = new StateMachine({
+                start: 'one',
+                states: ['one','two','three'],
+                inputEvents: ['next'],
+                transitions: [
+                    { event: 'next', from: 'one', to: 'two' },
+                    { event: 'next', from: 'two', to: 'three' },
+                    { event: 'next', from: 'three', to: 'one' },
+                ]
+            });
+
+            fsm.enter();
+            fsm.transitions.take(1).subscribe(function(transition) {
+                try {
+                    expect(transition.to).toBe('two');
+                    fsm.transitions.take(1).subscribe(function(transition) {
+                        try {
+                            expect(transition.to).toBe('three');
+                            done();
+                        } catch (error) {
+                            done(error);
+                        }
+                    });
+                    fsm.fireEvent('next');
+                } catch (error) {
+                    done(error);
+                }
+            });
+            fsm.fireEvent('next');
+        })
+
         it('exits all its ancestors if we tried to enter the state and it immediately exited', function() {
             var called = false;
             var fsm = new StateMachine({
