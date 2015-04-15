@@ -468,15 +468,14 @@ StateMachine.prototype = {
                     event
                 );
 
-                // TODO: fire before exiting?
-                this._transitions && this._transitions.onNext(event);
-
                 this._enterChildState(
                     nextStateName,
                     nextStateProps,
                     behaviorStates && behaviorStates[nextStateName],
                     event
                 );
+
+                this._transitions && this._transitions.onNext(event);
 
                 var currentState = this._getCurrentState();
                 if (!currentState || !currentState.isEntered) {
