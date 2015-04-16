@@ -1,7 +1,6 @@
 var ImmortalSubject = require('./ImmortalSubject');
 var ErrorContext = require('./ErrorContext');
 var Event = require('./Event');
-var NOOP = function() {};
 var UNIT_ARRAY = Object.freeze([]);
 var UNIT = Object.freeze({});
 
@@ -57,7 +56,9 @@ State.prototype = {
     _eventStreams: null,
     _listOfTransitionsByEvent: null,
 
-    get isEntered() { return this._entered; },
+    get isEntered() {
+        return this._entered;
+    },
 
     _createListOfTransitionsByEvent: function(transitions) {
         var result = {};
@@ -72,19 +73,24 @@ State.prototype = {
             var allowSelfTransition = transition.allowSelfTransition;
             var predicate = transition.predicate;
             var isParentTransition = transition.parent;
-            if (isParentTransition && !this.parent)
+            if (isParentTransition && !this.parent) {
                 throw this._getMissingPropertyError('Transition', transition, 'parent');
+            }
 
-            var self = isParentTransition ? this.parent : this;
+            var selfOrParent = isParentTransition ? this.parent : this;
 
-            if (!to)
+            if (!to) {
                 throw this._getMissingPropertyError('Transition', transition, 'to');
-            if (!event)
+            }
+            if (!event) {
                 throw this._getMissingPropertyError('Transition', transition, 'event');
-            if (!self._getSelfOrAncestorWithEvent(event))
+            }
+            if (!selfOrParent._getSelfOrAncestorWithEvent(event)) {
                 throw this._getInvalidPropertyError('Transition', transition, 'event');
-            if (predicate && typeof predicate !== 'function')
+            }
+            if (predicate && typeof predicate !== 'function') {
                 throw this._getInvalidPropertyError('Transition', transition, 'predicate');
+            }
 
             var listOfTransitions = result[event] || [];
             listOfTransitions.push({
@@ -100,12 +106,12 @@ State.prototype = {
 
     _getMissingPropertyError: function(type, transition, propertyName) {
         return new Error("StateMachine Error: " + type + " " + JSON.stringify(transition) + "\n" +
-            "  Missing " + (propertyName ?"'"+propertyName+"' " : "") + "property.");
+            "  Missing " + (propertyName ? "'" + propertyName + "' " : "") + "property.");
     },
 
     _getInvalidPropertyError: function(type, transition, propertyName) {
         return new Error("StateMachine Error: " + type + " " + JSON.stringify(transition) + "\n" +
-            "  Invalid " + (propertyName ?"'"+propertyName+"' " : "") + "property.");
+            "  Invalid " + (propertyName ? "'" + propertyName + "' " : "") + "property.");
     },
 
     _setProps: function(props) {
@@ -133,7 +139,9 @@ State.prototype = {
      * @type {Observable}
      */
     get enters() {
-        if (!this._enters) { this._enters = new ImmortalSubject; }
+        if (!this._enters) {
+            this._enters = new ImmortalSubject();
+        }
         return this._enters;
     },
 
@@ -142,7 +150,9 @@ State.prototype = {
      * @type {Observable}
      */
     get exits() {
-        if (!this._exits) { this._exits = new ImmortalSubject; }
+        if (!this._exits) {
+            this._exits = new ImmortalSubject();
+        }
         return this._exits;
     },
 
@@ -161,8 +171,9 @@ State.prototype = {
      */
     enter: function(data) {
         try {
-            if (!this.canEnter())
+            if (!this.canEnter()) {
                 return false;
+            }
 
             var enters = this._enters;
             var behavior = this._behavior;
@@ -171,10 +182,18 @@ State.prototype = {
             var afterEnter = behavior.afterEnter;
 
             this._entered = true;
-            enters && enters.onNext(data);
-            beforeEnter && beforeEnter(this, data);
-            onEnter && onEnter(this, data);
-            afterEnter && afterEnter(this, data);
+            if (enters) {
+                enters.onNext(data);
+            }
+            if (beforeEnter) {
+                beforeEnter(this, data);
+            }
+            if (onEnter) {
+                onEnter(this, data);
+            }
+            if (afterEnter) {
+                afterEnter(this, data);
+            }
             return true;
         } catch (error) {
             this._onUncaughtException(error);
@@ -197,8 +216,9 @@ State.prototype = {
      */
     exit: function(data) {
         try {
-            if (!this.canExit())
+            if (!this.canExit()) {
                 return false;
+            }
 
             var exits = this._exits;
             var behavior = this._behavior;
@@ -206,10 +226,18 @@ State.prototype = {
             var onExit = this._props.onExit;
             var afterExit = behavior.afterExit;
 
-            beforeExit && beforeExit(this, data);
-            onExit && onExit(this, data);
-            afterExit && afterExit(this, data);
-            exits && exits.onNext(data);
+            if (beforeExit) {
+                beforeExit(this, data);
+            }
+            if (onExit) {
+                onExit(this, data);
+            }
+            if (afterExit) {
+                afterExit(this, data);
+            }
+            if (exits) {
+                exits.onNext(data);
+            }
             this._entered = false;
             delete this._transientDataByName;
             if (this.parent && this.parent._entered && !this.parent._isTransitioning) {
@@ -266,8 +294,9 @@ State.prototype = {
         if (typeof eventHandler === 'function') {
             var event = new Event(name, data);
             eventHandler(this, event);
-            if (event.isHandled)
+            if (event.isHandled) {
                 return true;
+            }
         }
 
         // fire transitions
@@ -338,7 +367,7 @@ State.prototype = {
     _getEvents: function(name) {
         var eventStream = this._eventStreams[name];
         if (!eventStream) {
-            eventStream = new ImmortalSubject;
+            eventStream = new ImmortalSubject();
             this._eventStreams[name] = eventStream;
         }
         return eventStream;
@@ -387,8 +416,12 @@ State.prototype = {
     _getData: function(name) {
         var transientDataByName = this._transientDataByName || UNIT;
         var persistentDataByName = this._persistentDataByName || UNIT;
-        if (name in transientDataByName) return transientDataByName[name];
-        if (name in persistentDataByName) return persistentDataByName[name];
+        if (name in transientDataByName) {
+            return transientDataByName[name];
+        }
+        if (name in persistentDataByName) {
+            return persistentDataByName[name];
+        }
     },
 
     /**
@@ -484,7 +517,7 @@ State.prototype = {
         // give up
         this.exit(error);
         throw error;
-    },
+    }
 
 };
 

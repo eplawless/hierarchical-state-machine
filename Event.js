@@ -9,6 +9,6 @@ Event.prototype = {
     propagate: function() {
         this.isHandled = false;
     }
-}
+};
 
 module.exports = Event;

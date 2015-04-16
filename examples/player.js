@@ -1,3 +1,6 @@
+/*global console*/
+/*eslint-disable no-console*/
+
 var StateMachine = require('../StateMachine');
 var Rx = require('rx');
 function NOOP() {}
@@ -37,12 +40,12 @@ var playerUiFsm = new StateMachine({
         'playing': {
             transientData: ['currentVideo'],
             onEnter: startHeartbeat,
-            eventHandlers: { 'play': stopPlayingVideoThenPlayAgain },
+            eventHandlers: { 'play': stopPlayingVideoThenPlayAgain }
         },
         'stopping': {
             transientData: ['nextVideo'],
             onEnter: stopVideo,
-            eventHandlers: { 'play': setNextVideo },
+            eventHandlers: { 'play': setNextVideo }
         }
     }
 });
@@ -65,7 +68,7 @@ function resetToIdle(player, context) {
  * @param {Object} [event.data]  the video we're trying to play
  * @param {Number} [event.data.id]  the id of the video we're trying to play
  */
-function logUnhandledPlayEvent(playerUiFsm, event) {
+function logUnhandledPlayEvent(fsm, event) {
     var video = event.data;
     console.log('WARNING: ignoring play event for video', video.id);
     event.propagate();
@@ -151,7 +154,7 @@ function verifyVideo(verifyingState, context) {
 
     // verify video
     data.verified = true;
-    verifyingState.fireEvent('dataVerified', data)
+    verifyingState.fireEvent('dataVerified', data);
 }
 
 /**
@@ -289,7 +292,9 @@ onNextEnter('playing', interruptPlaying);
 
 function onNextEnter(state, callback) {
     playerUiFsm.transitions
-        .where(function(data) { return data.to === state; })
+        .where(function(data) {
+            return data.to === state;
+        })
         .delay(0)
         .take(1)
         .subscribe(callback.bind(null, playerUiFsm));
@@ -312,9 +317,9 @@ function interruptStopping() {
     playerUiFsm.fireEvent('play', { id: 101112 });
     onNextEnter('playing', function() {
         onNextEnter('idle', function() {
-            console.log('~> finished!')
+            console.log('~> finished!');
             playerUiFsm.exit();
-        })
-    })
+        });
+    });
 }
 

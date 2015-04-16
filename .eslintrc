@@ -1,0 +1,47 @@
+{
+    "rules": {
+        "block-scoped-var": 2,
+        "brace-style": 2,
+        "comma-style": 2,
+        "eol-last": 0,
+        "func-style": [2, "declaration"],
+        "indent": 2,
+        "key-spacing": 0,
+        "no-bitwise": 2,
+        "no-div-regex": 2,
+        "no-else-return": 2,
+        "no-eq-null": 2,
+        "no-floating-decimal": 2,
+        "no-implied-eval": 2,
+        "no-lonely-if": 2,
+        "no-mixed-requires": 2,
+        "no-multiple-empty-lines": 2,
+        "no-new-require": 2,
+        "no-self-compare": 2,
+        "no-throw-literal": 2,
+        "no-underscore-dangle": 0,
+        "no-use-before-define": [2, "nofunc"],
+        "no-void": 2,
+        "one-var": [2, "never"],
+        "quotes": 0,
+        "radix": 2,
+        "space-after-keywords": 2,
+        "space-before-blocks": 2,
+        "strict": 0,
+        "wrap-iife": [2, "inside"],
+        "yoda": [2, "never", { "exceptRange": true }]
+    },
+    "globals": {
+        "setTimeout": true,
+        "clearTimeout": true,
+        "setInterval": true,
+        "clearInterval": true,
+        "require": true,
+        "module": true,
+        "exports": true,
+        "describe": true,
+        "it": true,
+        "beforeEach": true
+    }
+}
+

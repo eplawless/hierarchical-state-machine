@@ -1,65 +1,68 @@
-var expect = require('expect')
-var sinon = require('sinon')
-var StateMachine = require('StateMachine')
-var Rx = require('rx');
+var expect = require('expect');
+var sinon = require('sinon');
+var StateMachine = require('StateMachine');
+
+/*eslint-disable brace-style*/
 
 describe('StateMachine', function() {
 
     it('is a class', function() {
-        expect(StateMachine).toBeA(Function)
-    })
+        expect(StateMachine).toBeA(Function);
+    });
 
     describe('#constructor', function() {
 
         it('requires a props object with a collection of states and a start property', function() {
-            expect(function() { new StateMachine; }).toThrow()
-            expect(function() { new StateMachine({}); }).toThrow()
-            expect(function() { new StateMachine({ states: {} }) }).toThrow()
-            expect(function() { new StateMachine({ start: 'foo', states: {} }) }).toThrow()
-            expect(function() { new StateMachine({ start: 'foo', states: { foo: {} } }) }).toNotThrow()
-        })
+            /*eslint-disable no-new*/
+            expect(function() { new StateMachine(); }).toThrow();
+            expect(function() { new StateMachine({}); }).toThrow();
+            expect(function() { new StateMachine({ states: {} }); }).toThrow();
+            expect(function() { new StateMachine({ start: 'foo', states: {} }); }).toThrow();
+            expect(function() { new StateMachine({ start: 'foo', states: { foo: {} } }); }).toNotThrow();
+            /*eslint-enable no-new*/
+        });
 
         it('accepts a props object and an optional behaviors object to extend it', function() {
             var calls = "";
             var sm = new StateMachine({
-                onEnter: function() { calls += "2" },
+                onEnter: function() { calls += "2"; },
                 start: "a",
                 states: {
                     a: {
-                        onEnter: function() { calls += "5" }
+                        onEnter: function() { calls += "5"; }
                     }
                 }
             }, {
-                beforeEnter: function() { calls += "1" },
-                afterEnter: function() { calls += "3" },
+                beforeEnter: function() { calls += "1"; },
+                afterEnter: function() { calls += "3"; },
                 states: {
                     a: {
-                        beforeEnter: function() { calls += "4" },
-                        afterEnter: function() { calls += "6" }
+                        beforeEnter: function() { calls += "4"; },
+                        afterEnter: function() { calls += "6"; }
                     }
                 }
-            })
-            sm.enter()
-            expect(calls).toEqual("123456")
-        })
+            });
+            sm.enter();
+            expect(calls).toEqual("123456");
+        });
 
-    })
+    });
 
     describe('#enter', function() {
 
         it('is a method', function() {
-            expect(StateMachine.prototype.enter).toBeA(Function)
-        })
+            expect(StateMachine.prototype.enter).toBeA(Function);
+        });
 
         it('enters the state machine\'s start state', function() {
             var sm = new StateMachine({
                 start: 'a',
                 states: { a: {} }
             });
-            expect(sm.currentStateName).toBe(null)
+            expect(sm.currentStateName).toBe(null);
             sm.enter();
-            expect(sm.currentStateName).toEqual('a')
-        })
+            expect(sm.currentStateName).toEqual('a');
+        });
 
         it('calls the state machine\'s onEnter method', function() {
             var onEnterSpy = sinon.spy();
@@ -69,23 +72,23 @@ describe('StateMachine', function() {
                 states: { a: {} }
             });
             sm.enter();
-            expect(onEnterSpy.calledOnce).toBe(true)
-        })
+            expect(onEnterSpy.calledOnce).toBe(true);
+        });
 
         it('calls the start state\'s onEnter method after the state machine\'s onEnter', function() {
             var calls = "";
             var sm = new StateMachine({
                 start: 'a',
-                onEnter: function() { calls += "1" },
+                onEnter: function() { calls += "1"; },
                 states: {
                     a: {
-                        onEnter: function() { calls += "2" }
+                        onEnter: function() { calls += "2"; }
                     }
                 }
             });
             sm.enter();
-            expect(calls).toEqual("12")
-        })
+            expect(calls).toEqual("12");
+        });
 
         it('does nothing if the state machine is already entered', function() {
             var onEnterSpy = sinon.spy();
@@ -96,8 +99,8 @@ describe('StateMachine', function() {
             });
             sm.enter();
             sm.enter();
-            expect(onEnterSpy.calledOnce).toBe(true)
-        })
+            expect(onEnterSpy.calledOnce).toBe(true);
+        });
 
         it('fires an "enters" observable', function() {
             var sm = new StateMachine({
@@ -108,15 +111,15 @@ describe('StateMachine', function() {
             sm.enters.subscribe(enterSpy);
             sm.enter();
             expect(enterSpy.calledOnce).toBe(true);
-        })
+        });
 
-    })
+    });
 
     describe('#exit', function() {
 
         it('is a method', function() {
             expect(StateMachine.prototype.exit).toBeA(Function);
-        })
+        });
 
         it('exits the state machine\'s current state', function() {
             var sm = new StateMachine({
@@ -125,12 +128,12 @@ describe('StateMachine', function() {
                     a: {}
                 }
             });
-            expect(sm.currentStateName).toBe(null)
+            expect(sm.currentStateName).toBe(null);
             sm.enter();
-            expect(sm.currentStateName).toEqual('a')
+            expect(sm.currentStateName).toEqual('a');
             sm.exit();
-            expect(sm.currentStateName).toBe(null)
-        })
+            expect(sm.currentStateName).toBe(null);
+        });
 
         it('calls the state machine\'s onExit method', function() {
             var onExitSpy = sinon.spy();
@@ -143,39 +146,39 @@ describe('StateMachine', function() {
             });
             sm.enter();
             sm.exit();
-            expect(onExitSpy.calledOnce).toBe(true)
-        })
+            expect(onExitSpy.calledOnce).toBe(true);
+        });
 
         it('calls the current state\'s onExit method before the state machine\'s', function() {
             var calls = "";
             var sm = new StateMachine({
                 start: 'a',
-                onExit: function() { calls += "2" },
+                onExit: function() { calls += "2"; },
                 states: {
                     a: {
-                        onExit: function() { calls += "1" }
+                        onExit: function() { calls += "1"; }
                     }
                 }
             });
             sm.enter();
             sm.exit();
-            expect(calls).toEqual("12")
-        })
+            expect(calls).toEqual("12");
+        });
 
         it('does nothing if the state machine is not entered', function() {
             var sm = new StateMachine({
                 start: 'a',
-                onExit: function() { throw new Error("called onExit") },
+                onExit: function() { throw new Error("called onExit"); },
                 states: {
                     a: {
-                        onExit: function() { throw new Error("called a.onExit") }
+                        onExit: function() { throw new Error("called a.onExit"); }
                     }
                 }
             });
-            expect(sm.currentStateName).toBe(null)
-            sm.exit()
-            expect(sm.currentStateName).toBe(null)
-        })
+            expect(sm.currentStateName).toBe(null);
+            sm.exit();
+            expect(sm.currentStateName).toBe(null);
+        });
 
         it('fires an "exits" observable', function() {
             var sm = new StateMachine({
@@ -184,13 +187,13 @@ describe('StateMachine', function() {
             });
             var exitSpy = sinon.spy();
             sm.exits.subscribe(exitSpy);
-            sm.exit()
+            sm.exit();
             sm.enter();
-            sm.exit()
+            sm.exit();
             expect(exitSpy.calledOnce).toBe(true);
-        })
+        });
 
-    })
+    });
 
     describe('event handler and transition ordering', function() {
 
@@ -208,7 +211,7 @@ describe('StateMachine', function() {
             expect(onEvent.calledOnce).toBe(true);
         });
 
-    })
+    });
 
     describe('manually exiting a state', function() {
 
@@ -233,7 +236,7 @@ describe('StateMachine', function() {
             expect(fsm.isEntered).toBe(true);
             fsm.fireEvent('quit');
             expect(fsm.isEntered).toBe(false);
-        })
+        });
 
         it('exits its parent if we tried to enter the state and it immediately exited', function() {
             var fsm = new StateMachine({
@@ -247,34 +250,34 @@ describe('StateMachine', function() {
                             state.exit();
                         }
                     }
-                },
+                }
             });
 
             fsm.enter();
             expect(fsm.isEntered).toBe(true);
             fsm.fireEvent('next');
             expect(fsm.isEntered).toBe(false);
-        })
+        });
 
         it('doesn\'t freak out when you subscribe to transitions inside a transitions onNext', function(done) {
             var fsm = new StateMachine({
                 start: 'one',
-                states: ['one','two','three'],
+                states: ['one', 'two', 'three'],
                 inputEvents: ['next'],
                 transitions: [
                     { event: 'next', from: 'one', to: 'two' },
                     { event: 'next', from: 'two', to: 'three' },
-                    { event: 'next', from: 'three', to: 'one' },
+                    { event: 'next', from: 'three', to: 'one' }
                 ]
             });
 
             fsm.enter();
-            fsm.transitions.take(1).subscribe(function(transition) {
+            fsm.transitions.take(1).subscribe(function(firstTransition) {
                 try {
-                    expect(transition.to).toBe('two');
-                    fsm.transitions.take(1).subscribe(function(transition) {
+                    expect(firstTransition.to).toBe('two');
+                    fsm.transitions.take(1).subscribe(function(secondTransition) {
                         try {
-                            expect(transition.to).toBe('three');
+                            expect(secondTransition.to).toBe('three');
                             done();
                         } catch (error) {
                             done(error);
@@ -286,7 +289,7 @@ describe('StateMachine', function() {
                 }
             });
             fsm.fireEvent('next');
-        })
+        });
 
         it('exits all its ancestors if we tried to enter the state and it immediately exited', function() {
             var called = false;
@@ -306,15 +309,15 @@ describe('StateMachine', function() {
                             }
                         }
                     }
-                },
+                }
             });
 
             fsm.enter();
             expect(called).toBe(true);
             expect(fsm.isEntered).toBe(false);
-        })
+        });
 
-    })
+    });
 
     describe('exception handling', function() {
 
@@ -332,7 +335,7 @@ describe('StateMachine', function() {
 
             expect(function() { fsm.enter(); }).toThrow();
             expect(fsm.isEntered).toBe(false);
-        })
+        });
 
         it('throws exceptions from the next state\'s onEnter method when transitioning', function() {
             var fsm = new StateMachine({
@@ -340,12 +343,12 @@ describe('StateMachine', function() {
                 states: [
                     'a',
                     { name: 'b', onEnter: function() { throw new Error("bar"); } }
-                ],
+                ]
             });
 
             fsm.enter();
             expect(function() { fsm.transition('b'); }).toThrow();
-        })
+        });
 
         it('throws exceptions from the first state\'s onExit method when transitioning', function() {
             var fsm = new StateMachine({
@@ -353,12 +356,12 @@ describe('StateMachine', function() {
                 states: [
                     { name: 'a', onExit: function() { throw new Error("baz"); } },
                     'b'
-                ],
+                ]
             });
 
             fsm.enter();
             expect(function() { fsm.transition('b'); }).toThrow();
-        })
+        });
 
         it('throws exceptions from a nested state\'s onEnter method when entering', function() {
             var fsm = new StateMachine({
@@ -367,14 +370,14 @@ describe('StateMachine', function() {
                     a: {
                         start: 'b',
                         states: {
-                            b: { onEnter: function() { throw new Error("quux") } }
+                            b: { onEnter: function() { throw new Error("quux"); } }
                         }
                     }
-                },
+                }
             });
 
             expect(function() { fsm.enter(); }).toThrow();
-        })
+        });
 
         it('throws exceptions from a nested state\'s onEnter method on an event transition', function() {
             var fsm = new StateMachine({
@@ -395,14 +398,14 @@ describe('StateMachine', function() {
                             }
                         }
                     }
-                },
+                }
             });
 
             fsm.enter();
-            expect(function() { fsm.fireEvent('x') }).toThrow();
-        })
+            expect(function() { fsm.fireEvent('x'); }).toThrow();
+        });
 
-    })
+    });
 
     describe('props', function() {
 
@@ -421,7 +424,7 @@ describe('StateMachine', function() {
                                     onEnter: function(state) {
                                         var count = state.getData('count') || 1;
                                         value += count;
-                                        state.setData('count', count+1);
+                                        state.setData('count', count + 1);
                                     }
                                 }
                             }
@@ -438,9 +441,9 @@ describe('StateMachine', function() {
                 top.enter();
                 expect(value).toBe('123');
 
-            })
+            });
 
-        })
+        });
 
         describe('.transitions', function() {
 
@@ -456,11 +459,11 @@ describe('StateMachine', function() {
                     states: {
                         'a': {},
                         'b': { onEnter: onEnter }
-                    },
+                    }
                 });
 
-                function isTuesdayAndIsPolite(fsm, data) {
-                    var dayOfTheWeek = fsm.getData('dayOfTheWeek');
+                function isTuesdayAndIsPolite(state, data) {
+                    var dayOfTheWeek = state.getData('dayOfTheWeek');
                     return dayOfTheWeek === 'tuesday' && data && data.please;
                 }
 
@@ -474,7 +477,7 @@ describe('StateMachine', function() {
                 expect(fsm.currentStateName).toBe('a');
                 fsm.fireEvent('next', { please: true });
                 expect(fsm.currentStateName).toBe('b');
-            })
+            });
 
             it('allows multiple transitions which differ only by predicate', function() {
 
@@ -485,7 +488,7 @@ describe('StateMachine', function() {
                     persistentData: ['day'],
                     transitions: [
                         { event: 'next', from: 'one', to: 'two', predicate: isMonday },
-                        { event: 'next', from: 'one', to: 'two', predicate: isTuesday },
+                        { event: 'next', from: 'one', to: 'two', predicate: isTuesday }
                     ]
                 });
 
@@ -510,7 +513,7 @@ describe('StateMachine', function() {
                 fsm.fireEvent('next');
                 expect(fsm.currentStateName).toBe('two');
 
-            })
+            });
 
             it('evaluates transitions with a from property before those without', function() {
                 var fsm = new StateMachine({
@@ -536,7 +539,7 @@ describe('StateMachine', function() {
                 expect(fsm.currentStateName).toBe('one');
                 fsm.fireEvent('next');
                 expect(fsm.currentStateName).toBe('three');
-            })
+            });
 
             it('evaluates transitions of equal specificity in the order they appear', function() {
                 var fsm = new StateMachine({
@@ -554,7 +557,7 @@ describe('StateMachine', function() {
                 expect(fsm.currentStateName).toBe('one');
                 fsm.fireEvent('next');
                 expect(fsm.currentStateName).toBe('two');
-            })
+            });
 
             it('does not allow self transitions by default if not provided a from: state', function() {
                 var onExit = sinon.spy();
@@ -575,7 +578,7 @@ describe('StateMachine', function() {
                 fsm.fireEvent('next');
                 expect(fsm.currentStateName).toBe('one');
                 expect(onExit.called).toBe(false);
-            })
+            });
 
             it('allows self transitions by default if provided a from: state', function() {
                 var onExit = sinon.spy();
@@ -596,7 +599,7 @@ describe('StateMachine', function() {
                 fsm.fireEvent('next');
                 expect(fsm.currentStateName).toBe('one');
                 expect(onExit.called).toBe(true);
-            })
+            });
 
             it('allows self transitions if explicitly specified', function() {
                 var onExit = sinon.spy();
@@ -618,10 +621,13 @@ describe('StateMachine', function() {
                 expect(fsm.currentStateName).toBe('one');
                 expect(onExit.called).toBe(true);
 
-            })
+            });
 
-        })
+        });
 
-    })
+    });
 
-})
+});
+
+/*eslint-enable brace-style*/
+
