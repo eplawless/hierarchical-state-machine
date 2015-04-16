@@ -1,3 +1,7 @@
+/*global console process*/
+/*eslint-disable no-console*/
+/*eslint-disable no-process-exit*/
+
 var StateMachine = require('../StateMachine');
 var Rx = require('rx');
 function NOOP() {}
@@ -28,7 +32,7 @@ var heroImageRotator = new StateMachine({
     start: 'idle',
     transitions: [
         { event: 'stop', to: 'idle' },
-        { event: 'rotate', to: 'active', allowSelfTransition: true },
+        { event: 'rotate', to: 'active', allowSelfTransition: true }
     ],
     states: {
         'idle': { onEnter: rotateIfWeHaveNewImages },
@@ -39,14 +43,14 @@ var heroImageRotator = new StateMachine({
                 { event: 'wait', from: 'rotating', to: 'waiting' },
                 { event: 'wait', from: 'waiting', to: 'waiting' },
                 { event: 'loaded', from: 'loading', to: 'rotating' },
-                { event: 'doneWaiting', from: 'waiting', to: 'rotating' },
+                { event: 'doneWaiting', from: 'waiting', to: 'rotating' }
             ],
             onEnter: updateImagesAndStopIfWeHaveNone,
             states: {
                 'loading': { onEnter: loadImages },
                 'rotating': { onEnter: rotateImages },
                 'waiting': { onEnter: wait }
-            },
+            }
         }
     }
 });
@@ -61,10 +65,10 @@ function printExiting() {
 /**
  * Log a thrown exception to stderr
  *
- * @param {State} heroImageRotator
+ * @param {State} state
  * @param {?} event
  */
-function logError(heroImageRotator, error) {
+function logError(state, error) {
     console.error('ERROR:', error);
 }
 
@@ -131,7 +135,9 @@ function loadImages(loadingState, event) {
     Rx.Observable.interval(300)
         .takeUntil(loadingState.exits)
         .take(imageSources.length)
-        .map(function(idx) { return imageSources[idx]; })
+        .map(function(idx) {
+            return imageSources[idx];
+        })
         .doAction(function(source) {
             console.log('HeroImageRotator: Loaded image', source);
         }, NOOP, function() {
@@ -222,7 +228,7 @@ function wait(waitingState, event) {
 
 heroImageRotator.enter();
 heroImageRotator.fireEvent('rotate', {
-    imageSources: ['cat','dog','cow','monkey'],
+    imageSources: ['cat', 'dog', 'cow', 'monkey'],
     interval: 1000
 });
 
@@ -236,13 +242,18 @@ var stdin = process.stdin;
 stdin.setRawMode(true);
 stdin.resume();
 stdin.setEncoding('utf8');
-stdin.on('data', function(key){
-    if (key == '\u0003') { // ctrl-c
+stdin.on('data', function(key) {
+    if (key === '\u0003') { // ctrl-c
         process.exit();
         return;
     }
-    if (key === 'i') fireWaitEvent(Infinity);
-    else if (key === 'w') fireWaitEvent(~~(Math.random()*2000));
-    else if (key === 'r') heroImageRotator.fireEvent('rotate');
-    else if (key === 's') heroImageRotator.fireEvent('stop');
+    if (key === 'i') {
+        fireWaitEvent(Infinity);
+    } else if (key === 'w') {
+        fireWaitEvent(Math.floor(Math.random() * 2000));
+    } else if (key === 'r') {
+        heroImageRotator.fireEvent('rotate');
+    } else if (key === 's') {
+        heroImageRotator.fireEvent('stop');
+    }
 });

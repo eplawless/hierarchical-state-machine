@@ -1,11 +1,8 @@
 var ImmortalSubject = require('./ImmortalSubject');
 var TransitionInfo = require('./TransitionInfo');
-var ErrorContext = require('./ErrorContext');
 var Event = require('./Event');
 var State = require('./State');
-var UNIT = Object.freeze({});
 var UNIT_ARRAY = Object.freeze([]);
-function NOOP() {}
 
 /**
  * A hierarchical state machine (or state chart).
@@ -63,11 +60,13 @@ function StateMachine(props, behavior, parent, returnRawStateMachine) {
     props.states = this._createStatesObject(props.states);
     State.call(this, props, behavior, parent);
 
-    if (typeof this._props.start !== 'string')
+    if (typeof this._props.start !== 'string') {
         throw new Error('StateMachine requires props.start to be a string');
+    }
 
-    if (!this._props.states[this._props.start])
+    if (!this._props.states[this._props.start]) {
         throw new Error('StateMachine\'s initial state "' + this._props.start + '" doesn\'t exist');
+    }
 
     this._childStates = {};
     this._queuedTransitions = [];
@@ -114,31 +113,39 @@ StateMachine.prototype = {
             var allowSelfTransition = transition.allowSelfTransition;
             var predicate = transition.predicate;
             var isParentTransition = transition.parent;
-            if (isParentTransition && !this.parent)
+            if (isParentTransition && !this.parent) {
                 throw this._getMissingPropertyError('Transition', transition, 'parent');
+            }
 
-            var self = isParentTransition ? this.parent : this;
+            var selfOrParent = isParentTransition ? this.parent : this;
 
-            if (from && !self._props.states[from])
+            if (from && !selfOrParent._props.states[from]) {
                 throw this._getInvalidStateError('Transition', transition, from, 'from');
-            if (!to)
+            }
+            if (!to) {
                 throw this._getMissingPropertyError('Transition', transition, 'to');
-            if (to && !self._props.states[to])
+            }
+            if (to && !selfOrParent._props.states[to]) {
                 throw this._getInvalidStateError('Transition', transition, to, 'to');
-            if (!event)
+            }
+            if (!event) {
                 throw this._getMissingPropertyError('Transition', transition, 'event');
-            if (!self._getSelfOrAncestorWithEvent(event, false, false))
+            }
+            if (!selfOrParent._getSelfOrAncestorWithEvent(event, false, false)) {
                 throw this._getInvalidPropertyError('Transition', transition, 'event');
-            if (predicate && typeof predicate !== 'function')
+            }
+            if (predicate && typeof predicate !== 'function') {
                 throw this._getInvalidPropertyError('Transition', transition, 'predicate');
+            }
 
             if (!isParentTransition && from) {
-                var fromStateProps = self._props.states[from];
-                if (!fromStateProps)
-                    throw this._getMissingPropertyError('Transition', transition, 'states.'+from);
+                var fromStateProps = selfOrParent._props.states[from];
+                if (!fromStateProps) {
+                    throw this._getMissingPropertyError('Transition', transition, 'states.' + from);
+                }
                 var fromStateTransitions = fromStateProps.transitions || [];
                 if (!Array.isArray(fromStateTransitions)) {
-                    throw this._getInvalidPropertyError('Transition', transition, 'states.'+from+'.transitions');
+                    throw this._getInvalidPropertyError('Transition', transition, 'states.' + from + '.transitions');
                 }
                 fromStateTransitions.push({
                     event: event,
@@ -207,7 +214,9 @@ StateMachine.prototype = {
      * @return {Observable}
      */
     get transitions() {
-        if (!this._transitions) { this._transitions = new ImmortalSubject; }
+        if (!this._transitions) {
+            this._transitions = new ImmortalSubject();
+        }
         return this._transitions;
     },
 
@@ -218,7 +227,7 @@ StateMachine.prototype = {
 
     _getInvalidStateError: function(type, transition, state, stateType) {
         return new Error("StateMachine Error: " + type + " " + JSON.stringify(transition) + "\n" +
-            "  Invalid " + (stateType ?"'"+stateType+"' " : "") + "state: " + state + "\n" +
+            "  Invalid " + (stateType ? "'" + stateType + "' " : "") + "state: " + state + "\n" +
             "  Valid states: " + this._getValidStatesForErrorMessage().join(', '));
     },
 
@@ -240,8 +249,9 @@ StateMachine.prototype = {
         if (typeof eventHandler === 'function') {
             var event = new Event(name, data);
             eventHandler(this, event);
-            if (event.isHandled)
+            if (event.isHandled) {
                 return true;
+            }
         }
 
         // fire transitions
@@ -274,11 +284,10 @@ StateMachine.prototype = {
         if (this._entered) {
             if (!this._hasQueuedExit) {
                 return;
-            } else {
-                this._hasQueuedEnter = true;
-                this._queuedEnterData = data;
-                return;
             }
+            this._hasQueuedEnter = true;
+            this._queuedEnterData = data;
+            return;
         }
 
         var event;
@@ -292,7 +301,9 @@ StateMachine.prototype = {
         this._hasQueuedEnter = false;
         this._queuedEnterData = undefined;
         this._entered = true; // we set this flag here so we can transition more on the way in
-        this._enters && this._enters.onNext(event);
+        if (this._enters) {
+            this._enters.onNext(event);
+        }
         this._isTransitioning = true;
 
         var beforeEnter = this._behavior.beforeEnter;
@@ -300,9 +311,15 @@ StateMachine.prototype = {
         var afterEnter = this._behavior.afterEnter;
 
         try {
-            beforeEnter && beforeEnter.call(this, this, event);
-            onEnter && onEnter.call(this, this, event);
-            afterEnter && afterEnter.call(this, this, event);
+            if (beforeEnter) {
+                beforeEnter.call(this, this, event);
+            }
+            if (onEnter) {
+                onEnter.call(this, this, event);
+            }
+            if (afterEnter) {
+                afterEnter.call(this, this, event);
+            }
             this._isTransitioning = false;
         } catch (e) {
             this._onUncaughtException(e);
@@ -349,10 +366,12 @@ StateMachine.prototype = {
         }
 
         this._entered = false; // we set this flag here so we can't transition on the way out
+
         var thrownError;
+        var event = data;
+
         try {
 
-            var event = data;
             if (event instanceof TransitionInfo) {
                 data = event.data;
             } else {
@@ -360,7 +379,9 @@ StateMachine.prototype = {
             }
 
             var behaviorStates = this._behavior.states;
-            this._transitions && this._transitions.onNext({ from: this.currentStateName, to: null });
+            if (this._transitions) {
+                this._transitions.onNext({ from: this.currentStateName, to: null });
+            }
             this._exitChildState(
                 this.currentStateName,
                 this._props.states[this.currentStateName],
@@ -372,9 +393,15 @@ StateMachine.prototype = {
             var onExit = this._props.onExit;
             var afterExit = this._behavior.afterExit;
 
-            beforeExit && beforeExit.call(this, this, event);
-            onExit && onExit.call(this, this, event);
-            afterExit && afterExit.call(this, this, event);
+            if (beforeExit) {
+                beforeExit.call(this, this, event);
+            }
+            if (onExit) {
+                onExit.call(this, this, event);
+            }
+            if (afterExit) {
+                afterExit.call(this, this, event);
+            }
         } catch (error) {
             thrownError = error;
         }
@@ -389,10 +416,12 @@ StateMachine.prototype = {
             }
         }
 
-        try {
-            this._exits && this._exits.onNext(event);
-        } catch (error) {
-            thrownError = thrownError || error;
+        if (this._exits) {
+            try {
+                this._exits.onNext(event);
+            } catch (error) {
+                thrownError = thrownError || error;
+            }
         }
 
         this._hasQueuedExit = false;
@@ -446,22 +475,22 @@ StateMachine.prototype = {
                 var nextStateName = queuedEnter.name;
 
                 var event;
-                var data = queuedEnter.data;
-                if (data instanceof TransitionInfo) {
-                    event = data;
-                    data = event.data;
+                var queuedEnterData = queuedEnter.data;
+                if (queuedEnterData instanceof TransitionInfo) {
+                    event = queuedEnterData;
+                    queuedEnterData = event.data;
                 } else {
-                    event = new TransitionInfo(lastStateName, nextStateName, data);
+                    event = new TransitionInfo(lastStateName, nextStateName, queuedEnterData);
                 }
 
-                var allowSelfTransition = queuedEnter.allowSelfTransition;
+                var queuedEnterAllowSelfTransition = queuedEnter.allowSelfTransition;
                 var lastStateProps = props.states[lastStateName];
                 var nextStateProps = props.states[nextStateName];
-                if (!nextStateProps || (lastStateName === nextStateName && !allowSelfTransition)) {
+                if (!nextStateProps || (lastStateName === nextStateName && !queuedEnterAllowSelfTransition)) {
                     continue;
                 }
 
-                var lastChildState = this._exitChildState(
+                this._exitChildState(
                     lastStateName,
                     lastStateProps,
                     behaviorStates && behaviorStates[lastStateName],
@@ -475,7 +504,9 @@ StateMachine.prototype = {
                     event
                 );
 
-                this._transitions && this._transitions.onNext(event);
+                if (this._transitions) {
+                    this._transitions.onNext(event);
+                }
 
                 var currentState = this._getCurrentState();
                 if (!currentState || !currentState.isEntered) {
@@ -494,16 +525,16 @@ StateMachine.prototype = {
         }
 
         if (this._hasQueuedExit) {
-            var data = this._queuedExitData;
+            var queuedExitData = this._queuedExitData;
             this._hasQueuedExit = false;
             this._queuedExitData = undefined;
-            this.exit(data);
+            this.exit(queuedExitData);
         }
         if (this._hasQueuedEnter) {
-            var data = this._queuedEnterData;
+            var nextQueuedEnterData = this._queuedEnterData;
             this._hasQueuedEnter = false;
             this._queuedEnterData = undefined;
-            this.enter(data);
+            this.enter(nextQueuedEnterData);
         }
     },
 
@@ -534,7 +565,7 @@ StateMachine.prototype = {
         delete this._queuedExitData;
         delete this._isTransitioning;
         this._queuedTransitions.length = 0;
-    },
+    }
 
 };
 
@@ -551,11 +582,21 @@ StateMachineHandle.prototype = {
     __proto__: StateMachineHandle.prototype, // for constructor queries
 
     // properties
-    get isEntered() { return this._stateMachine.isEntered; },
-    get enters() { return this._stateMachine.enters; },
-    get exits() { return this._stateMachine.exits; },
-    get transitions() { return this._stateMachine.transitions; },
-    get currentStateName() { return this._stateMachine.currentStateName; },
+    get isEntered() {
+        return this._stateMachine.isEntered;
+    },
+    get enters() {
+        return this._stateMachine.enters;
+    },
+    get exits() {
+        return this._stateMachine.exits;
+    },
+    get transitions() {
+        return this._stateMachine.transitions;
+    },
+    get currentStateName() {
+        return this._stateMachine.currentStateName;
+    },
 
     // methods
     setBehavior: function() {
@@ -589,7 +630,7 @@ StateMachineHandle.prototype = {
     hasData: function() {
         var stateMachine = this._stateMachine;
         return stateMachine.hasData.apply(stateMachine, arguments);
-    },
+    }
 };
 
 module.exports = StateMachine;

@@ -1,4 +1,6 @@
-var Rx = require('rx');
+/*global console*/
+/*eslint-disable no-console*/
+
 var StateMachine = require('../StateMachine');
 
 var focusFsm = new StateMachine({
@@ -7,14 +9,14 @@ var focusFsm = new StateMachine({
     inputEvents: ['focus', 'blur'],
     transitions: [
         { event: 'focus', to: 'focused' },
-        { event: 'blur', to: 'blurred' },
-    ],
+        { event: 'blur', to: 'blurred' }
+    ]
 });
 
 focusFsm.setBehavior({
     states: {
         focused: { afterEnter: printEntering, beforeExit: printLeaving },
-        blurred: { afterEnter: printEntering, beforeExit: printLeaving },
+        blurred: { afterEnter: printEntering, beforeExit: printLeaving }
     }
 });
 
