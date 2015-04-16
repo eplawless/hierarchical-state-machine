@@ -890,13 +890,13 @@ describe('StateMachine', function() {
             fsm.transitions.take(1).subscribe(function(transition) {
                 ++count;
                 expect(transition).toEqual({
-                    data: 'data four',
+                    data: 'data five',
                     from: { name: 'two' },
                     to: null
                 });
                 expect(fsm.currentStateName).toBe('two');
             });
-            fsm.exit('data four');
+            fsm.exit('data five');
             expect(count).toBe(5);
 
         });
