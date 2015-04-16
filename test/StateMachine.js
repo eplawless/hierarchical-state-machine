@@ -883,7 +883,7 @@ describe('StateMachine', function() {
                 });
                 expect(fsm.currentStateName).toBe('two');
             });
-            fsm.fireEvent('next', 'data three')
+            fsm.fireEvent('next', 'data three');
             // implicit 'next' on enter 'c'
             expect(count).toBe(4);
 
