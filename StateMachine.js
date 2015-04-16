@@ -1,5 +1,4 @@
 var ImmortalSubject = require('./ImmortalSubject');
-var TransitionInfo = require('./TransitionInfo');
 var Event = require('./Event');
 var State = require('./State');
 var UNIT_ARRAY = Object.freeze([]);
@@ -84,6 +83,16 @@ StateMachine.prototype = {
     _queuedEnterData: undefined,
     _queuedTransitions: null,
     _isTransitioning: false,
+
+    /**
+     * If we enter a child and it immediately transitions to another state, we
+     * won't have time to notify our transitions Observable before getting our
+     * child's transition notification. This flag helps us throw out that
+     * initial notification (that we changed to our child's state) before it
+     * can tell us that it changed substates.
+     * @type {Boolean}
+     */
+    _hasTriedToNotifyTransitionSinceEnteringChild: false,
 
     /**
      * The name of the currently active state.
@@ -291,11 +300,11 @@ StateMachine.prototype = {
         }
 
         var event;
-        if (data instanceof TransitionInfo) {
+        if (data instanceof EnterExitInfo) {
             event = data;
             data = event.data;
         } else {
-            event = new TransitionInfo(null, this._props.start, data);
+            event = new EnterExitInfo(null, this._props.start, data);
         }
 
         this._hasQueuedEnter = false;
@@ -349,10 +358,67 @@ StateMachine.prototype = {
         return childState;
     },
 
-    _enterChildState: function(stateName, stateProps, stateBehavior, data) {
+    _enterChildState: function(stateName, stateProps, stateBehavior, enterExitInfo, lastStateDescription) {
         this.currentStateName = stateName;
+        this._hasTriedToNotifyTransitionSinceEnteringChild = false;
         var childState = this._getOrCreateChildState(stateName, stateProps, stateBehavior);
-        childState.enter(data);
+        if (childState instanceof StateMachine) {
+            childState.transitions
+                .takeUntil(childState.exits)
+                .filter(hasToAndFromStates)
+                .subscribe(this._notifyChildTransition.bind(this, lastStateDescription, enterExitInfo.data));
+        }
+        childState.enter(enterExitInfo);
+    },
+
+    _notifyChildTransition: function(lastStateDescription, enterData, transition) {
+        var hadTriedToNotify = this._hasTriedToNotifyTransitionSinceEnteringChild;
+        this._hasTriedToNotifyTransitionSinceEnteringChild = true;
+
+        var transitions = this._transitions;
+        if (!transitions) {
+            return;
+        }
+
+        var currentStateName = this.currentStateName;
+        if (!hadTriedToNotify) {
+            var enterChildTransitionInfo = {
+                from: lastStateDescription,
+                to: { name: currentStateName, subState: transition.from }
+            };
+            if (typeof enterData !== 'undefined') {
+                enterChildTransitionInfo.data = enterData;
+            }
+            transitions.onNext(enterChildTransitionInfo);
+        }
+
+        var newTransitionInfo = {
+            from: { name: currentStateName, subState: transition.from },
+            to: { name: currentStateName, subState: transition.to }
+        };
+        if (transition.data) {
+            newTransitionInfo.data = transition.data;
+        }
+        transitions.onNext(newTransitionInfo);
+    },
+
+    getStateDescription: function() {
+        var currentStateName = this.currentStateName;
+        if (!currentStateName) {
+            return null;
+        }
+
+        var subStateDescription;
+        var currentState = this._childStates[currentStateName];
+        if (currentState instanceof StateMachine) {
+            subStateDescription = currentState.getStateDescription() || null;
+        }
+
+        var result = { name: currentStateName, };
+        if (subStateDescription) {
+            result.subState = subStateDescription;
+        }
+        return result;
     },
 
     exit: function(data) {
@@ -368,20 +434,29 @@ StateMachine.prototype = {
         this._entered = false; // we set this flag here so we can't transition on the way out
 
         var thrownError;
-        var event = data;
+        var event;
 
         try {
 
-            if (event instanceof TransitionInfo) {
+            if (data instanceof EnterExitInfo) {
+                event = data;
                 data = event.data;
             } else {
-                event = new TransitionInfo(this.currentStateName, null, data);
+                event = new EnterExitInfo(this.currentStateName,  null, data);
             }
 
             var behaviorStates = this._behavior.states;
             if (this._transitions) {
-                this._transitions.onNext({ from: this.currentStateName, to: null });
+                var transitionInfo = {
+                    from: this.getStateDescription(),
+                    to: null
+                };
+                if (typeof data !== 'undefined') {
+                    transitionInfo.data = data;
+                }
+                this._transitions.onNext(transitionInfo);
             }
+
             this._exitChildState(
                 this.currentStateName,
                 this._props.states[this.currentStateName],
@@ -442,13 +517,25 @@ StateMachine.prototype = {
         return childState;
     },
 
+    _thisOrDescendantIsTransitioning: function() {
+        var currentState = this._getCurrentState();
+        if (!currentState || !(currentState instanceof StateMachine)) {
+            return this._isTransitioning;
+        }
+        return this._isTransitioning || currentState._thisOrDescendantIsTransitioning();
+    },
+
     _transition: function(stateName, data, allowSelfTransition) {
         if (!this._entered) {
             return;
         }
         var props = this._props;
         var behaviorStates = this._behavior.states;
-        if (this._isTransitioning && stateName) {
+
+        // If our descendant is transitioning and raises an event which causes us to transition,
+        // we want to wait until it's done before we start going. We expect that it will try to
+        // transition its parent when it's done.
+        if (this._thisOrDescendantIsTransitioning() && stateName) {
             this._queuedTransitions.push({
                 name: stateName,
                 data: data,
@@ -476,11 +563,11 @@ StateMachine.prototype = {
 
                 var event;
                 var queuedEnterData = queuedEnter.data;
-                if (queuedEnterData instanceof TransitionInfo) {
+                if (queuedEnterData instanceof EnterExitInfo) {
                     event = queuedEnterData;
                     queuedEnterData = event.data;
                 } else {
-                    event = new TransitionInfo(lastStateName, nextStateName, queuedEnterData);
+                    event = new EnterExitInfo(lastStateName, nextStateName, queuedEnterData);
                 }
 
                 var queuedEnterAllowSelfTransition = queuedEnter.allowSelfTransition;
@@ -489,6 +576,8 @@ StateMachine.prototype = {
                 if (!nextStateProps || (lastStateName === nextStateName && !queuedEnterAllowSelfTransition)) {
                     continue;
                 }
+
+                var lastStateDescription = this._transitions ? this.getStateDescription() : null;
 
                 this._exitChildState(
                     lastStateName,
@@ -501,12 +590,29 @@ StateMachine.prototype = {
                     nextStateName,
                     nextStateProps,
                     behaviorStates && behaviorStates[nextStateName],
-                    event
+                    event,
+                    lastStateDescription
                 );
 
-                if (this._transitions) {
-                    this._transitions.onNext(event);
+                // If we're notifying people of our transitions and we've just
+                // been entered, but our child state immediately transitioned
+                // when it was entered, we don't need to onNext our transitions
+                // Observable because _notifyChildTransition did it for us when
+                // it saw a) the child transition come in and b) that we hadn't
+                // tried to notify since entering our child.
+                if (this._transitions &&
+                    (lastStateDescription || !this._hasTriedToNotifyTransitionSinceEnteringChild)) {
+                    var transitionInfo = {
+                        from: lastStateDescription,
+                        to: this.getStateDescription()
+                    };
+                    if (typeof queuedEnterData !== 'undefined') {
+                        transitionInfo.data = queuedEnterData;
+                    }
+                    this._transitions.onNext(transitionInfo);
                 }
+
+                this._hasTriedToNotifyTransitionSinceEnteringChild = true;
 
                 var currentState = this._getCurrentState();
                 if (!currentState || !currentState.isEntered) {
@@ -535,6 +641,10 @@ StateMachine.prototype = {
             this._hasQueuedEnter = false;
             this._queuedEnterData = undefined;
             this.enter(nextQueuedEnterData);
+        }
+
+        if (this.parent) {
+            this.parent._transition();
         }
     },
 
@@ -568,6 +678,18 @@ StateMachine.prototype = {
     }
 
 };
+
+function hasToAndFromStates(transition) {
+    return transition && transition.from && transition.to;
+}
+
+function EnterExitInfo(from, to, data) {
+    this.from = from || null;
+    this.to = to || null;
+    if (typeof data !== 'undefined') {
+        this.data = data;
+    }
+}
 
 /**
  * A reference to a state machine which enforces public/private and input/output

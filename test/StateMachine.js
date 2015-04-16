@@ -1,6 +1,7 @@
 var expect = require('expect');
 var sinon = require('sinon');
 var StateMachine = require('StateMachine');
+var Rx = require('rx');
 
 /*eslint-disable brace-style*/
 
@@ -257,38 +258,6 @@ describe('StateMachine', function() {
             expect(fsm.isEntered).toBe(true);
             fsm.fireEvent('next');
             expect(fsm.isEntered).toBe(false);
-        });
-
-        it('doesn\'t freak out when you subscribe to transitions inside a transitions onNext', function(done) {
-            var fsm = new StateMachine({
-                start: 'one',
-                states: ['one', 'two', 'three'],
-                inputEvents: ['next'],
-                transitions: [
-                    { event: 'next', from: 'one', to: 'two' },
-                    { event: 'next', from: 'two', to: 'three' },
-                    { event: 'next', from: 'three', to: 'one' }
-                ]
-            });
-
-            fsm.enter();
-            fsm.transitions.take(1).subscribe(function(firstTransition) {
-                try {
-                    expect(firstTransition.to).toBe('two');
-                    fsm.transitions.take(1).subscribe(function(secondTransition) {
-                        try {
-                            expect(secondTransition.to).toBe('three');
-                            done();
-                        } catch (error) {
-                            done(error);
-                        }
-                    });
-                    fsm.fireEvent('next');
-                } catch (error) {
-                    done(error);
-                }
-            });
-            fsm.fireEvent('next');
         });
 
         it('exits all its ancestors if we tried to enter the state and it immediately exited', function() {
@@ -622,6 +591,313 @@ describe('StateMachine', function() {
                 expect(onExit.called).toBe(true);
 
             });
+
+        });
+
+    });
+
+    describe('#transitions', function() {
+
+        it('is an observable', function() {
+            var fsm = new StateMachine({
+                start: 'one',
+                states: ['one']
+            });
+            expect(fsm.transitions).toBeAn(Rx.Observable);
+        });
+
+        it('emits when entering and exiting the FSM', function() {
+            var fsm = new StateMachine({
+                start: 'one',
+                states: ['one']
+            });
+            var count = 0;
+            fsm.transitions.take(1).subscribe(function(transition) {
+                ++count;
+                expect(transition).toEqual({
+                    from: null,
+                    to: { name: 'one' }
+                });
+            });
+            fsm.transitions.skip(1).take(1).subscribe(function(transition) {
+                ++count;
+                expect(transition).toEqual({
+                    from: { name: 'one' },
+                    to: null
+                });
+            });
+            fsm.enter();
+            fsm.exit();
+            expect(count).toBe(2);
+        });
+
+        it('emits when transitioning between states', function() {
+            var fsm = new StateMachine({
+                start: 'one',
+                states: ['one', 'two'],
+                inputEvents: ['next'],
+                transitions: [
+                    { event: 'next', from: 'one', to: 'two' },
+                    { event: 'next', from: 'two', to: 'one' }
+                ]
+            });
+            var count = 0;
+            fsm.enter();
+            fsm.transitions.take(1).subscribe(function(transition) {
+                expect(fsm.currentStateName).toBe('two');
+                ++count;
+                expect(transition).toEqual({
+                    from: { name: 'one' },
+                    to: { name: 'two' }
+                });
+            });
+            expect(fsm.currentStateName).toBe('one');
+            fsm.fireEvent('next');
+            expect(fsm.currentStateName).toBe('two');
+            expect(count).toBe(1);
+            fsm.exit();
+        });
+
+        it('doesn\'t freak out when you subscribe to transitions inside a transitions onNext', function(done) {
+            var fsm = new StateMachine({
+                start: 'one',
+                states: ['one', 'two', 'three'],
+                inputEvents: ['next'],
+                transitions: [
+                    { event: 'next', from: 'one', to: 'two' },
+                    { event: 'next', from: 'two', to: 'three' },
+                    { event: 'next', from: 'three', to: 'one' }
+                ]
+            });
+
+            fsm.enter();
+            expect(fsm.currentStateName).toBe('one');
+            fsm.transitions.take(1).subscribe(function(firstTransition) {
+                try {
+                    expect(firstTransition).toEqual({
+                        from: { name: 'one' },
+                        to: { name: 'two' }
+                    });
+                    expect(fsm.currentStateName).toBe('two');
+                    fsm.transitions.take(1).subscribe(function(secondTransition) {
+                        try {
+                            expect(secondTransition).toEqual({
+                                from: { name: 'two' },
+                                to: { name: 'three' }
+                            });
+                            expect(fsm.currentStateName).toBe('three');
+                            done();
+                        } catch (error) {
+                            done(error);
+                        }
+                    });
+                    fsm.fireEvent('next');
+                } catch (error) {
+                    done(error);
+                }
+            });
+            fsm.fireEvent('next');
+            fsm.exit();
+        });
+
+        it('is recursive, and fires with every state change', function() {
+            function isInSubStateB(state) {
+                return state.currentStateName === 'b';
+            }
+
+            var fsm = new StateMachine({
+                start: 'one',
+                inputEvents: ['next'],
+                transitions: [
+                    { event: 'next', from: 'one', to: 'two', predicate: isInSubStateB },
+                    { event: 'next', from: 'two', to: 'one' }
+                ],
+                states: {
+                    'one': {
+                        start: 'a',
+                        states: ['a', 'b'],
+                        transitions: [
+                            { event: 'next', from: 'a', to: 'b' }
+                        ]
+                    },
+                    'two': {}
+                }
+            });
+
+            var count = 0;
+            fsm.transitions.take(1).subscribe(function(transition) {
+                ++count;
+                expect(fsm.currentStateName).toBe('one');
+                expect(transition).toEqual({
+                    data: 'data one',
+                    from: null,
+                    to: {
+                        name: 'one',
+                        subState: { name: 'a' }
+                    }
+                });
+            });
+            fsm.enter('data one');
+            expect(count).toBe(1);
+
+            fsm.transitions.take(1).subscribe(function(transition) {
+                ++count;
+                expect(fsm.currentStateName).toBe('one');
+                expect(transition).toEqual({
+                    data: 'data two',
+                    from: {
+                        name: 'one',
+                        subState: { name: 'a' }
+                    },
+                    to: {
+                        name: 'one',
+                        subState: { name: 'b' }
+                    }
+                });
+            });
+            fsm.fireEvent('next', 'data two');
+            expect(count).toBe(2);
+
+            fsm.transitions.take(1).subscribe(function(transition) {
+                ++count;
+                expect(fsm.currentStateName).toBe('two');
+                expect(transition).toEqual({
+                    data: 'data three',
+                    from: {
+                        name: 'one',
+                        subState: { name: 'b' }
+                    },
+                    to: {
+                        name: 'two'
+                    }
+                });
+            });
+            fsm.fireEvent('next', 'data three');
+            expect(count).toBe(3);
+
+            fsm.transitions.take(1).subscribe(function(transition) {
+                ++count;
+                expect(fsm.currentStateName).toBe('one');
+                expect(transition).toEqual({
+                    data: 'data four',
+                    from: {
+                        name: 'two'
+                    },
+                    to: {
+                        name: 'one',
+                        subState: { name: 'a' }
+                    }
+                });
+            });
+            fsm.fireEvent('next', 'data four');
+            expect(count).toBe(4);
+
+            fsm.transitions.take(1).subscribe(function(transition) {
+                ++count;
+                expect(fsm.currentStateName).toBe('one');
+                expect(transition).toEqual({
+                    data: 'data five',
+                    from: {
+                        name: 'one',
+                        subState: { name: 'a' }
+                    },
+                    to: null
+                });
+            });
+            fsm.exit('data five');
+            expect(count).toBe(5);
+        });
+
+        it('behaves reasonably with child state machines that transition on enter', function() {
+            function isInSubStateC(state) {
+                return state.currentStateName === 'c';
+            }
+
+            function fireNext(data, state) {
+                state.fireEvent('next', data);
+            }
+
+            var fsm = new StateMachine({
+                start: 'one',
+                inputEvents: ['next'],
+                transitions: [
+                    { event: 'next', from: 'one', to: 'two', predicate: isInSubStateC },
+                    { event: 'next', from: 'two', to: 'one' }
+                ],
+                states: {
+                    'one': {
+                        start: 'a',
+                        states: [
+                            { name: 'a', onEnter: fireNext.bind(null, 'data two') },
+                            { name: 'b' },
+                            { name: 'c', onEnter: fireNext.bind(null, 'data four') }
+                        ],
+                        transitions: [
+                            { event: 'next', from: 'a', to: 'b' },
+                            { event: 'next', from: 'b', to: 'c' }
+                        ]
+                    },
+                    'two': {}
+                }
+            });
+
+            var count = 0;
+            fsm.transitions.take(1).subscribe(function(transition) {
+                ++count;
+                expect(fsm.currentStateName).toBe('one');
+                expect(transition).toEqual({
+                    data: 'data one',
+                    from: null,
+                    to: { name: 'one', subState: { name: 'a' } }
+                });
+            });
+            fsm.transitions.skip(1).take(1).subscribe(function(transition) {
+                expect(count).toBe(1);
+                ++count;
+                expect(fsm.currentStateName).toBe('one');
+                expect(transition).toEqual({
+                    data: 'data two',
+                    from: { name: 'one', subState: { name: 'a' } },
+                    to: { name: 'one', subState: { name: 'b' } }
+                });
+            });
+            fsm.enter('data one');
+            // implicit 'next' on enter 'one'
+            expect(count).toBe(2);
+
+            fsm.transitions.take(1).subscribe(function(transition) {
+                ++count;
+                expect(transition).toEqual({
+                    data: 'data three',
+                    from: { name: 'one', subState: { name: 'b' } },
+                    to: { name: 'one', subState: { name: 'c' } }
+                });
+                expect(fsm.currentStateName).toBe('one');
+            });
+            fsm.transitions.skip(1).take(1).subscribe(function(transition) {
+                ++count;
+                expect(transition).toEqual({
+                    data: 'data four',
+                    from: { name: 'one', subState: { name: 'c' } },
+                    to: { name: 'two' }
+                });
+                expect(fsm.currentStateName).toBe('two');
+            });
+            fsm.fireEvent('next', 'data three')
+            // implicit 'next' on enter 'c'
+            expect(count).toBe(4);
+
+            fsm.transitions.take(1).subscribe(function(transition) {
+                ++count;
+                expect(transition).toEqual({
+                    data: 'data four',
+                    from: { name: 'two' },
+                    to: null
+                });
+                expect(fsm.currentStateName).toBe('two');
+            });
+            fsm.exit('data four');
+            expect(count).toBe(5);
 
         });
 
