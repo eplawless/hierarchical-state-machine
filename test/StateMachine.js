@@ -901,6 +901,89 @@ describe('StateMachine', function() {
 
         });
 
+        it('doesn\'t matter how deeply nested the states are', function() {
+            var fsm = new StateMachine({
+                start: 'a',
+                inputEvents: ['next'],
+                states: {
+                    'a': {
+                        start: 'b',
+                        states: {
+                            'b': {
+                                start: 'c',
+                                transitions: [
+                                    { event: 'next', from: 'c', to: 'muffins' }
+                                ],
+                                states: {
+                                    'muffins': {},
+                                    'c': {
+                                        start: 'd',
+                                        states: ['d']
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+
+            var count = 0;
+            fsm.transitions.take(1).subscribe(function(transition) {
+                ++count;
+                expect(transition).toEqual({
+                    from: null,
+                    to: {
+                        name: 'a', subState: {
+                            name: 'b', subState: {
+                                name: 'c', subState: {
+                                    name: 'd'
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+            fsm.transitions.skip(1).take(1).subscribe(function(transition) {
+                ++count;
+                expect(transition).toEqual({
+                    from: {
+                        name: 'a', subState: {
+                            name: 'b', subState: {
+                                name: 'c', subState: {
+                                    name: 'd'
+                                }
+                            }
+                        }
+                    },
+                    to: {
+                        name: 'a', subState: {
+                            name: 'b', subState: {
+                                name: 'muffins'
+                            }
+                        }
+                    }
+                });
+            });
+            fsm.transitions.skip(2).take(1).subscribe(function(transition) {
+                ++count;
+                expect(transition).toEqual({
+                    from: {
+                        name: 'a', subState: {
+                            name: 'b', subState: {
+                                name: 'muffins'
+                            }
+                        }
+                    },
+                    to: null
+                });
+            });
+
+            fsm.enter();
+            fsm.fireEvent('next');
+            fsm.exit();
+            expect(count).toBe(3);
+        });
+
     });
 
 });
